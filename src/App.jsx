@@ -5,14 +5,18 @@ import { supabase } from './lib/supabase';
 import { Plus } from 'lucide-react';
 import GoalForm from './components/goals/GoalForm';
 import GoalList from './components/goals/GoalList';
-import JournalSection from './components/dashboard/JournalSection';
 import DailyTracker from './components/dashboard/DailyTracker';
+import JournalSection from './components/dashboard/JournalSection';
+import ProgressSection from './components/analytics/ProgressSection';
 
 function AppContent() {
   const { user, signOut } = useAuth();
   const [goals, setGoals] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // State to trigger chart refreshes when logs change
+  const [lastUpdate, setLastUpdate] = useState(Date.now());
 
   // Fetch goals from DB
   const fetchGoals = async () => {
@@ -46,8 +50,6 @@ function AppContent() {
 
   if (!user) return <Auth />;
 
-  // ... inside AppContent ...
-
   return (
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white shadow-sm border-b border-gray-200 px-6 py-4 flex justify-between items-center sticky top-0 z-10">
@@ -66,16 +68,23 @@ function AppContent() {
       <main className="max-w-3xl mx-auto p-6">
 
         {/* 1. THE DAILY TRACKER (Main Focus) */}
-        <DailyTracker goals={goals} />
+        {/* We pass onUpdate so the charts know when to refresh */}
+        <DailyTracker
+          goals={goals}
+          onUpdate={() => setLastUpdate(Date.now())}
+        />
 
-        {/* 2. JOURNAL (New) */}
+        {/* 2. THE JOURNAL SECTION */}
         <JournalSection />
 
-        {/* 3. SETTINGS */}
-        <div className="mt-12 border-t border-gray-200 pt-8"></div>
+        {/* 3. VISUALIZATION / ANALYTICS */}
+        {/* This should appear exactly ONCE here */}
+        <div className="border-t border-gray-200 pt-8 mt-8">
+           <ProgressSection goals={goals} lastUpdate={lastUpdate} />
+        </div>
 
-        {/* 4. THE GOAL MANAGER (Collapsible) */}
-        <div className="mt-12 border-t border-gray-200 pt-8">
+        {/* 4. GOAL SETTINGS / MANAGEMENT */}
+        <div className="mt-8 pt-8 border-t border-gray-200">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-lg font-bold text-gray-900">Goal Settings</h2>
             <button
@@ -97,7 +106,11 @@ function AppContent() {
             />
           )}
 
-          <GoalList goals={goals} onDelete={handleDelete} />
+          {loading ? (
+            <div className="text-center py-10 text-gray-400">Loading goals...</div>
+          ) : (
+            <GoalList goals={goals} onDelete={handleDelete} />
+          )}
         </div>
       </main>
     </div>

@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { getTodayString, formatDateReadable } from '../../lib/dateUtils';
 import { CheckCircle2, Circle, Save } from 'lucide-react';
 
-export default function DailyTracker({ goals }) {
+export default function DailyTracker({ goals, onUpdate }) {
   const { user } = useAuth();
   const today = getTodayString();
 
@@ -61,6 +61,7 @@ export default function DailyTracker({ goals }) {
       // Revert if failed (optional, but good practice)
     }
     setSaving(null);
+    if (onUpdate) onUpdate();
   };
 
   const handleNumericChange = async (goal, value) => {
@@ -90,6 +91,7 @@ export default function DailyTracker({ goals }) {
 
     if (error) console.error(error);
     setSaving(null);
+    if (onUpdate) onUpdate();
   };
 
   if (goals.length === 0) return null;
