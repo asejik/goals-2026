@@ -5,6 +5,7 @@ import { supabase } from './lib/supabase';
 import { Plus } from 'lucide-react';
 import GoalForm from './components/goals/GoalForm';
 import GoalList from './components/goals/GoalList';
+import JournalSection from './components/dashboard/JournalSection';
 import DailyTracker from './components/dashboard/DailyTracker';
 
 function AppContent() {
@@ -67,7 +68,13 @@ function AppContent() {
         {/* 1. THE DAILY TRACKER (Main Focus) */}
         <DailyTracker goals={goals} />
 
-        {/* 2. THE GOAL MANAGER (Collapsible) */}
+        {/* 2. JOURNAL (New) */}
+        <JournalSection />
+
+        {/* 3. SETTINGS */}
+        <div className="mt-12 border-t border-gray-200 pt-8"></div>
+
+        {/* 4. THE GOAL MANAGER (Collapsible) */}
         <div className="mt-12 border-t border-gray-200 pt-8">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-lg font-bold text-gray-900">Goal Settings</h2>
