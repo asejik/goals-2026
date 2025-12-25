@@ -45,7 +45,7 @@ class handler(BaseHTTPRequestHandler):
 
         try:
             # 4. Call Gemini
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            model = genai.GenerativeModel('gemini-2.5-flash')
             response = model.generate_content(prompt)
 
             # 5. Return Result
