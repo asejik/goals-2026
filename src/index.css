@@ -1,1 +1,12 @@
 @import "tailwindcss";
+/* Prevent iOS zoom on inputs */
+@media screen and (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Safe area padding for iPhone X/11/12+ */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
