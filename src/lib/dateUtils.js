@@ -23,3 +23,25 @@ export const formatDateReadable = (dateString) => {
     day: 'numeric'
   }).format(date);
 };
+
+// ... keep getTodayString and formatDateReadable ...
+
+/**
+ * Returns the date string (YYYY-MM-DD) of the start of the current week (Sunday)
+ */
+export const getStartOfWeek = () => {
+  const date = new Date();
+  const day = date.getDay(); // 0 (Sun) to 6 (Sat)
+  const diff = date.getDate() - day;
+  const start = new Date(date.setDate(diff));
+  return start.toISOString().split('T')[0];
+};
+
+/**
+ * Returns the date string (YYYY-MM-DD) of the start of the current month
+ */
+export const getStartOfMonth = () => {
+  const date = new Date();
+  const start = new Date(date.getFullYear(), date.getMonth(), 1);
+  return start.toISOString().split('T')[0];
+};

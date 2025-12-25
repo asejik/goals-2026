@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Sparkles, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function AiCoach({ goals }) {
   const [insight, setInsight] = useState(null);
@@ -40,7 +41,10 @@ export default function AiCoach({ goals }) {
 
     } catch (err) {
       console.error(err);
-      alert("AI is warming up. Please try again or deploy to Vercel to see it work!");
+      // REPLACED Alert
+      toast.info("AI Service Warming Up", {
+        description: "Please try again in 10 seconds or check your API quotas."
+      });
     } finally {
       setLoading(false);
     }
