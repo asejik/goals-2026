@@ -5,6 +5,7 @@ import { supabase } from './lib/supabase';
 import { Plus } from 'lucide-react';
 import GoalForm from './components/goals/GoalForm';
 import GoalList from './components/goals/GoalList';
+import DailyTracker from './components/dashboard/DailyTracker';
 
 function AppContent() {
   const { user, signOut } = useAuth();
@@ -44,11 +45,14 @@ function AppContent() {
 
   if (!user) return <Auth />;
 
+  // ... inside AppContent ...
+
   return (
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white shadow-sm border-b border-gray-200 px-6 py-4 flex justify-between items-center sticky top-0 z-10">
         <h1 className="text-xl font-bold text-blue-600">2026 Goals</h1>
         <div className="flex items-center gap-4">
+          <span className="text-xs text-gray-400 hidden sm:inline">Logged in as {user.email}</span>
           <button
             onClick={signOut}
             className="text-sm text-gray-500 hover:text-gray-800 font-medium"
@@ -58,36 +62,36 @@ function AppContent() {
         </div>
       </nav>
 
-      <main className="max-w-4xl mx-auto p-6">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Your Ambitions</h2>
-            <p className="text-gray-500 text-sm mt-1">Define what success looks like.</p>
+      <main className="max-w-3xl mx-auto p-6">
+
+        {/* 1. THE DAILY TRACKER (Main Focus) */}
+        <DailyTracker goals={goals} />
+
+        {/* 2. THE GOAL MANAGER (Collapsible) */}
+        <div className="mt-12 border-t border-gray-200 pt-8">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-lg font-bold text-gray-900">Goal Settings</h2>
+            <button
+              onClick={() => setShowForm(!showForm)}
+              className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <Plus size={16} />
+              {showForm ? 'Cancel' : 'Add New Goal'}
+            </button>
           </div>
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="flex items-center gap-2 bg-gray-900 hover:bg-black text-white px-4 py-2 rounded-lg transition-all shadow-lg shadow-gray-200"
-          >
-            <Plus size={18} />
-            {showForm ? 'Close' : 'Add Goal'}
-          </button>
-        </div>
 
-        {showForm && (
-          <GoalForm
-            onGoalAdded={() => {
-              fetchGoals();
-              setShowForm(false);
-            }}
-            onCancel={() => setShowForm(false)}
-          />
-        )}
+          {showForm && (
+            <GoalForm
+              onGoalAdded={() => {
+                fetchGoals();
+                setShowForm(false);
+              }}
+              onCancel={() => setShowForm(false)}
+            />
+          )}
 
-        {loading ? (
-          <div className="text-center py-10 text-gray-400">Loading goals...</div>
-        ) : (
           <GoalList goals={goals} onDelete={handleDelete} />
-        )}
+        </div>
       </main>
     </div>
   );
