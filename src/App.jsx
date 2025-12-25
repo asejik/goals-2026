@@ -8,6 +8,7 @@ import GoalList from './components/goals/GoalList';
 import DailyTracker from './components/dashboard/DailyTracker';
 import JournalSection from './components/dashboard/JournalSection';
 import ProgressSection from './components/analytics/ProgressSection';
+import AiCoach from './components/dashboard/AiCoach';
 
 function AppContent() {
   const { user, signOut } = useAuth();
@@ -69,6 +70,10 @@ function AppContent() {
 
         {/* 1. THE DAILY TRACKER (Main Focus) */}
         {/* We pass onUpdate so the charts know when to refresh */}
+
+        {/* 0. AI COACH (New) */}
+        <AiCoach goals={goals} />
+
         <DailyTracker
           goals={goals}
           onUpdate={() => setLastUpdate(Date.now())}
