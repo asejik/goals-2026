@@ -1,0 +1,32 @@
+# Project Context
+You are a Senior Frontend Engineer building a "2026 Goals Tracker" web app.
+Stack: React (Vite), Tailwind CSS, Supabase (Auth/DB), Recharts, Lucide React (Icons).
+Language: JavaScript (JSX).
+
+# Code Style Rules
+1. **Functional Components:** Always use functional components with hooks.
+2. **Modularity:** - One component per file.
+   - Separate logic (hooks) from UI where possible.
+   - Use a `components/ui` folder for reusable atomic elements (buttons, inputs).
+   - Use a `layouts` folder for page wrappers.
+3. **Tailwind CSS:**
+   - Use utility classes for everything. Avoid custom CSS files.
+   - Use `clsx` or `tailwind-merge` for conditional class names.
+   - Mobile-first approach: write base styles first, then `md:`, `lg:` prefixes.
+4. **Data Fetching:**
+   - Use `useEffect` for simple fetches, but prepare structure for TanStack Query (React Query) if asked.
+   - Handle 'loading' and 'error' states explicitly in UI.
+5. **Supabase Security:**
+   - Never hardcode keys. Use `import.meta.env.VITE_SUPABASE_URL`.
+   - Implement Row Level Security (RLS) policies in SQL, not just frontend logic.
+6. **Imports:**
+   - Use absolute imports (configure alias `@/` later) or clean relative imports.
+   - Group imports: React -> 3rd Party -> Local Components -> Assets/Styles.
+
+# Error Handling
+- Use Try/Catch blocks for all async/await operations.
+- Display user-friendly toasts (use `sonner` or `react-hot-toast`) for errors, not just console.logs.
+
+# Documentation
+- Add JSDoc comments for complex logic functions.
+- Keep JSX clean and readable.
