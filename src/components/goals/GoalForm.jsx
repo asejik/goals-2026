@@ -1,14 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
-import { Plus, X, Loader2, Calendar } from 'lucide-react';
+import { Plus, X, Loader2, Calendar, Save } from 'lucide-react';
 import { toast } from 'sonner';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const PRESET_CATEGORIES = ['Faith', 'Health', 'Career', 'Personal', 'Finance', 'Relationships'];
 
-export default function GoalForm({ onGoalAdded, onCancel }) {
+export default function GoalForm({ onGoalAdded, onCancel, initialData = null }) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -16,8 +18,26 @@ export default function GoalForm({ onGoalAdded, onCancel }) {
     type: 'boolean',
     period: 'yearly',
     target_value: '',
-    specific_days: [] // NEW
+    specific_days: []
   });
+
+  // Load data if editing
+  useEffect(() => {
+    if (initialData) {
+      setFormData({
+        title: initialData.title,
+        category: initialData.category,
+        type: initialData.type,
+        period: initialData.period,
+        target_value: initialData.target_value || '',
+        specific_days: initialData.specific_days || []
+      });
+      // Check if category is custom
+      if (!PRESET_CATEGORIES.includes(initialData.category)) {
+        setIsCustomCategory(true);
+      }
+    }
+  }, [initialData]);
 
   const toggleDay = (day) => {
     setFormData(prev => {
@@ -33,19 +53,35 @@ export default function GoalForm({ onGoalAdded, onCancel }) {
     setLoading(true);
 
     try {
-      const { error } = await supabase.from('goals').insert({
+      const payload = {
         user_id: user.id,
         title: formData.title,
         category: formData.category,
         type: formData.type,
         period: formData.period,
         target_value: formData.target_value ? parseFloat(formData.target_value) : null,
-        specific_days: formData.period === 'weekly' ? formData.specific_days : null // Only save for weekly
-      });
+        specific_days: formData.period === 'weekly' ? formData.specific_days : null
+      };
+
+      let error;
+      if (initialData) {
+        // UPDATE
+        const { error: updateError } = await supabase
+          .from('goals')
+          .update(payload)
+          .eq('id', initialData.id);
+        error = updateError;
+      } else {
+        // CREATE
+        const { error: insertError } = await supabase
+          .from('goals')
+          .insert(payload);
+        error = insertError;
+      }
 
       if (error) throw error;
       onGoalAdded();
-      toast.success('Goal created successfully');
+      toast.success(initialData ? 'Goal updated' : 'Goal created');
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -54,9 +90,11 @@ export default function GoalForm({ onGoalAdded, onCancel }) {
   };
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6 animate-in fade-in slide-in-from-top-2">
+    <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6 animate-in fade-in slide-in-from-top-2 shadow-sm">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-sm font-semibold text-gray-900">New Goal</h3>
+        <h3 className="text-sm font-semibold text-gray-900">
+          {initialData ? 'Edit Goal' : 'New Goal'}
+        </h3>
         <button onClick={onCancel} className="text-gray-400 hover:text-gray-600 transition-colors">
           <X size={16} />
         </button>
@@ -74,16 +112,44 @@ export default function GoalForm({ onGoalAdded, onCancel }) {
         />
 
         <div className="grid grid-cols-2 gap-3">
-          <select
-            className="w-full text-xs px-3 py-2 bg-gray-50 border border-gray-200 rounded-md outline-none text-gray-600"
-            value={formData.category}
-            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-          >
-            <option value="Personal">Personal</option>
-            <option value="Faith">Faith</option>
-            <option value="Career">Career</option>
-            <option value="Health">Health</option>
-          </select>
+          {/* Custom Category Logic */}
+          <div>
+            {!isCustomCategory ? (
+              <select
+                className="w-full text-xs px-3 py-2 bg-gray-50 border border-gray-200 rounded-md outline-none text-gray-600"
+                value={formData.category}
+                onChange={(e) => {
+                  if (e.target.value === 'CUSTOM') {
+                    setIsCustomCategory(true);
+                    setFormData({ ...formData, category: '' });
+                  } else {
+                    setFormData({ ...formData, category: e.target.value });
+                  }
+                }}
+              >
+                {PRESET_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                <option value="CUSTOM">+ Add Custom...</option>
+              </select>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="Type Category..."
+                  className="w-full text-xs px-3 py-2 bg-white border border-blue-200 rounded-md outline-none text-blue-700"
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsCustomCategory(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+          </div>
 
           <select
             className="w-full text-xs px-3 py-2 bg-gray-50 border border-gray-200 rounded-md outline-none text-gray-600"
@@ -109,8 +175,8 @@ export default function GoalForm({ onGoalAdded, onCancel }) {
             <option value="yearly">Yearly</option>
           </select>
 
-          {/* Target Input (Only show if NOT using specific days, or if numeric) */}
-          {formData.period !== 'weekly' && (
+          {/* Target Input */}
+          {(formData.type === 'numeric' || formData.period !== 'daily') && (
              <input
               type="number"
               placeholder="Target"
@@ -127,7 +193,7 @@ export default function GoalForm({ onGoalAdded, onCancel }) {
              <label className="text-xs text-gray-400 font-medium uppercase tracking-wider">Select Days</label>
              <div className="flex justify-between gap-1">
                {DAYS.map(day => {
-                 const isSelected = formData.specific_days.includes(day);
+                 const isSelected = formData.specific_days?.includes(day);
                  return (
                    <button
                     key={day}
@@ -154,8 +220,8 @@ export default function GoalForm({ onGoalAdded, onCancel }) {
           disabled={loading}
           className="w-full flex items-center justify-center gap-2 bg-gray-900 hover:bg-black text-white text-xs font-medium py-2.5 rounded-md transition-all"
         >
-          {loading ? <Loader2 className="animate-spin" size={14} /> : <Plus size={14} />}
-          Create Goal
+          {loading ? <Loader2 className="animate-spin" size={14} /> : (initialData ? <Save size={14} /> : <Plus size={14} />)}
+          {initialData ? 'Save Changes' : 'Create Goal'}
         </button>
       </form>
     </div>

@@ -1,99 +1,115 @@
 import { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
+import { Mail, Lock, Loader2, User } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function Auth() {
+  const [loading, setLoading] = useState(false);
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [message, setMessage] = useState(null);
-
-  const { signIn, signUp } = useAuth();
+  const [fullName, setFullName] = useState(''); // New State
 
   const handleAuth = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
-    setMessage(null);
 
     try {
       if (isLogin) {
-        const { error } = await signIn({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       } else {
-        const { error } = await signUp({ email, password });
+        // Sign Up with Meta Data
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: fullName, // Save name here
+            }
+          }
+        });
         if (error) throw error;
-        setMessage('Check your email for the confirmation link!');
+        toast.success('Account created! Check your email to verify.');
       }
-    } catch (err) {
-      setError(err.message);
+    } catch (error) {
+      toast.error(error.message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
-        <h2 className="text-2xl font-bold text-center text-gray-900 mb-8">
-          {isLogin ? 'Welcome Back' : 'Start Your 2026 Journey'}
-        </h2>
-
-        {error && (
-          <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-4">
-            {error}
-          </div>
-        )}
-
-        {message && (
-          <div className="bg-green-50 text-green-600 p-3 rounded-lg text-sm mb-4">
-            {message}
-          </div>
-        )}
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <div className="w-full max-w-sm bg-white rounded-xl shadow-lg p-8 border border-gray-100">
+        <div className="text-center mb-8">
+          <h1 className="text-2xl font-bold text-gray-900">2026 Goals</h1>
+          <p className="text-sm text-gray-500 mt-2">Design your year.</p>
+        </div>
 
         <form onSubmit={handleAuth} className="space-y-4">
+          {!isLogin && (
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">First Name</label>
+              <div className="relative">
+                <User size={16} className="absolute left-3 top-3 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Sogo"
+                  required
+                  className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-              placeholder="you@example.com"
-              required
-            />
+            <label className="block text-xs font-medium text-gray-700 mb-1">Email Address</label>
+            <div className="relative">
+              <Mail size={16} className="absolute left-3 top-3 text-gray-400" />
+              <input
+                type="email"
+                placeholder="you@example.com"
+                required
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-              placeholder="••••••••"
-              required
-              minLength={6}
-            />
+            <label className="block text-xs font-medium text-gray-700 mb-1">Password</label>
+            <div className="relative">
+              <Lock size={16} className="absolute left-3 top-3 text-gray-400" />
+              <input
+                type="password"
+                placeholder="••••••••"
+                required
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-gray-900 hover:bg-black text-white font-medium py-2.5 rounded-lg transition-all flex justify-center items-center"
           >
-            {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Create Account')}
+            {loading ? <Loader2 className="animate-spin" size={20} /> : (isLogin ? 'Sign In' : 'Create Account')}
           </button>
         </form>
 
-        <div className="mt-6 text-center text-sm text-gray-600">
-          {isLogin ? "Don't have an account? " : "Already have an account? "}
+        <div className="mt-6 text-center">
           <button
             onClick={() => setIsLogin(!isLogin)}
-            className="text-blue-600 font-semibold hover:text-blue-700"
+            className="text-xs text-gray-500 hover:text-gray-900 font-medium"
           >
-            {isLogin ? 'Sign Up' : 'Log In'}
+            {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
           </button>
         </div>
       </div>

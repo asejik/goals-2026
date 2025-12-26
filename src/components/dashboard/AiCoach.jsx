@@ -51,38 +51,38 @@ export default function AiCoach({ goals }) {
   };
 
   return (
-    <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl p-6 text-white shadow-lg mb-8">
-      <div className="flex justify-between items-start mb-4">
-        <h2 className="text-lg font-bold flex items-center gap-2">
-          <Sparkles className="text-yellow-300" />
-          AI Weekly Coach
+    <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-xl p-5 text-white shadow-lg mb-8">
+      <div className="flex justify-between items-start mb-3">
+        <h2 className="text-base font-bold flex items-center gap-2">
+          <Sparkles className="text-yellow-400" size={16} />
+          Weekly Coach
         </h2>
         {!insight && (
           <button
             onClick={generateInsight}
             disabled={loading}
-            className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg text-sm font-medium transition-colors backdrop-blur-sm"
+            className="bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors backdrop-blur-sm border border-white/10"
           >
-            {loading ? <Loader2 className="animate-spin" size={16} /> : 'Generate Review'}
+            {loading ? <Loader2 className="animate-spin" size={14} /> : 'Get Analysis'}
           </button>
         )}
       </div>
 
       {insight ? (
         <div className="animate-in fade-in duration-500">
-          <p className="leading-relaxed bg-white/10 p-4 rounded-lg border border-white/10">
+          <p className="leading-relaxed text-sm text-gray-200">
             {insight}
           </p>
           <button
             onClick={() => setInsight(null)}
-            className="text-xs text-white/60 mt-3 hover:text-white"
+            className="text-xs text-white/50 mt-2 hover:text-white"
           >
-            Clear & Refresh
+            Dismiss
           </button>
         </div>
       ) : (
-        <p className="text-indigo-100 text-sm opacity-90">
-          Tap the button to let Gemini analyze your logs and give you a strategy for next week.
+        <p className="text-gray-400 text-xs">
+          Get a personalized review of your progress and tips for the week ahead.
         </p>
       )}
     </div>

@@ -1,6 +1,6 @@
-import { Trash2, Tag, Repeat } from 'lucide-react';
+import { Trash2, Tag, Repeat, Edit2 } from 'lucide-react';
 
-export default function GoalList({ goals, onDelete }) {
+export default function GoalList({ goals, onDelete, onEdit }) { // <--- 1. Check onEdit is here
   if (goals.length === 0) {
     return (
       <div className="text-center py-8 bg-white rounded-lg border border-dashed border-gray-200">
@@ -19,53 +19,46 @@ export default function GoalList({ goals, onDelete }) {
   };
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
-       {/* List Header */}
-       <div className="hidden sm:grid grid-cols-12 gap-4 px-4 py-2 bg-gray-50 border-b border-gray-100 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
-          <div className="col-span-6">Goal</div>
-          <div className="col-span-3">Category</div>
-          <div className="col-span-2">Frequency</div>
-          <div className="col-span-1 text-right"></div>
-        </div>
-
-      <div className="divide-y divide-gray-100">
-        {goals.map((goal) => (
-          <div key={goal.id} className="grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-4 p-3 items-center hover:bg-gray-50 transition-colors group">
-
-            {/* Title */}
-            <div className="col-span-6 font-medium text-sm text-gray-800 truncate">
-              {goal.title}
-            </div>
-
-            {/* Category Pill */}
-            <div className="col-span-3">
-              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${getCategoryColor(goal.category)}`}>
-                <Tag size={10} /> {goal.category}
-              </span>
-            </div>
-
-            {/* Frequency */}
-            <div className="col-span-2 flex items-center gap-1 text-xs text-gray-500">
-              <Repeat size={12} className="text-gray-400" />
-              <span className="capitalize">{goal.period}</span>
-              {goal.period === 'weekly' && goal.target_value && (
-                <span className="text-gray-400">({goal.target_value}x)</span>
-              )}
-            </div>
-
-            {/* Delete Action */}
-            <div className="col-span-1 text-right">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      {goals.map((goal) => (
+        <div key={goal.id} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow relative group">
+          <div className="flex justify-between items-start mb-2">
+            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${getCategoryColor(goal.category)}`}>
+              <Tag size={10} /> {goal.category}
+            </span>
+            <div className="flex gap-1">
+              {/* 2. Check the onClick here */}
+              <button
+                onClick={() => onEdit(goal)}
+                className="text-gray-300 hover:text-blue-500 p-1 transition-colors"
+                title="Edit Goal"
+              >
+                <Edit2 size={12} />
+              </button>
               <button
                 onClick={() => onDelete(goal.id)}
-                className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                className="text-gray-300 hover:text-red-500 p-1 transition-colors"
                 title="Delete Goal"
               >
-                <Trash2 size={14} />
+                <Trash2 size={12} />
               </button>
             </div>
           </div>
-        ))}
-      </div>
+
+          <h3 className="font-semibold text-sm text-gray-800 leading-tight mb-2 pr-4 truncate">
+            {goal.title}
+          </h3>
+
+          <div className="flex items-center gap-2 text-[10px] text-gray-500">
+            <div className="flex items-center gap-1 bg-gray-50 px-1.5 py-0.5 rounded">
+              <Repeat size={10} />
+              <span className="capitalize">{goal.period}</span>
+              {goal.period === 'weekly' && goal.target_value && ` (${goal.target_value}x)`}
+            </div>
+            {goal.type === 'boolean' ? <span>Checkbox</span> : <span>Numeric</span>}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
