@@ -154,7 +154,7 @@ function AppContent() {
         {activeView === 'dashboard' ? (
           <div className="animate-in fade-in duration-300">
             <AiCoach goals={goals} />
-            <DailyTracker goals={goals} onUpdate={() => setLastUpdate(Date.now())} />
+            <DailyTracker onUpdate={() => setLastUpdate(Date.now())} />
 
             <div className="border-t border-gray-200 pt-8">
                <ProgressSection goals={goals} lastUpdate={lastUpdate} />
