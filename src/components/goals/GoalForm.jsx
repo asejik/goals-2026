@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
-import { Plus, X, Loader2, Calendar, Save } from 'lucide-react';
+import { Plus, X, Loader2, Calendar, Save, Flag } from 'lucide-react'; // Added Flag icon
 import { toast } from 'sonner';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -18,10 +18,10 @@ export default function GoalForm({ onGoalAdded, onCancel, initialData = null }) 
     type: 'boolean',
     period: 'yearly',
     target_value: '',
-    specific_days: []
+    specific_days: [],
+    due_date: '' // NEW
   });
 
-  // Load data if editing
   useEffect(() => {
     if (initialData) {
       setFormData({
@@ -30,9 +30,9 @@ export default function GoalForm({ onGoalAdded, onCancel, initialData = null }) 
         type: initialData.type,
         period: initialData.period,
         target_value: initialData.target_value || '',
-        specific_days: initialData.specific_days || []
+        specific_days: initialData.specific_days || [],
+        due_date: initialData.due_date || '' // Load existing date
       });
-      // Check if category is custom
       if (!PRESET_CATEGORIES.includes(initialData.category)) {
         setIsCustomCategory(true);
       }
@@ -60,22 +60,16 @@ export default function GoalForm({ onGoalAdded, onCancel, initialData = null }) 
         type: formData.type,
         period: formData.period,
         target_value: formData.target_value ? parseFloat(formData.target_value) : null,
-        specific_days: formData.period === 'weekly' ? formData.specific_days : null
+        specific_days: formData.period === 'weekly' ? formData.specific_days : null,
+        due_date: formData.due_date || null // Save date
       };
 
       let error;
       if (initialData) {
-        // UPDATE
-        const { error: updateError } = await supabase
-          .from('goals')
-          .update(payload)
-          .eq('id', initialData.id);
+        const { error: updateError } = await supabase.from('goals').update(payload).eq('id', initialData.id);
         error = updateError;
       } else {
-        // CREATE
-        const { error: insertError } = await supabase
-          .from('goals')
-          .insert(payload);
+        const { error: insertError } = await supabase.from('goals').insert(payload);
         error = insertError;
       }
 
@@ -112,7 +106,7 @@ export default function GoalForm({ onGoalAdded, onCancel, initialData = null }) 
         />
 
         <div className="grid grid-cols-2 gap-3">
-          {/* Custom Category Logic */}
+          {/* Category */}
           <div>
             {!isCustomCategory ? (
               <select
@@ -135,22 +129,17 @@ export default function GoalForm({ onGoalAdded, onCancel, initialData = null }) 
                 <input
                   type="text"
                   autoFocus
-                  placeholder="Type Category..."
+                  placeholder="Category..."
                   className="w-full text-xs px-3 py-2 bg-white border border-blue-200 rounded-md outline-none text-blue-700"
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                 />
-                <button
-                  type="button"
-                  onClick={() => setIsCustomCategory(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X size={14} />
-                </button>
+                <button type="button" onClick={() => setIsCustomCategory(false)} className="text-gray-400 hover:text-gray-600"><X size={14} /></button>
               </div>
             )}
           </div>
 
+          {/* Type */}
           <select
             className="w-full text-xs px-3 py-2 bg-gray-50 border border-gray-200 rounded-md outline-none text-gray-600"
             value={formData.type}
@@ -161,33 +150,45 @@ export default function GoalForm({ onGoalAdded, onCancel, initialData = null }) 
           </select>
         </div>
 
-        {/* Frequency Row */}
-        <div className="flex gap-3 items-center bg-gray-50 p-2 rounded-md border border-gray-100">
-          <Calendar size={14} className="text-gray-400" />
-          <select
-            className="text-xs bg-transparent outline-none text-gray-700 font-medium"
-            value={formData.period}
-            onChange={(e) => setFormData({ ...formData, period: e.target.value })}
-          >
-            <option value="daily">Daily</option>
-            <option value="weekly">Weekly</option>
-            <option value="monthly">Monthly</option>
-            <option value="yearly">Yearly</option>
-          </select>
+        {/* Frequency & Target & Due Date */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="flex gap-2 items-center bg-gray-50 p-2 rounded-md border border-gray-100">
+            <Calendar size={14} className="text-gray-400" />
+            <select
+              className="text-xs bg-transparent outline-none text-gray-700 font-medium flex-1"
+              value={formData.period}
+              onChange={(e) => setFormData({ ...formData, period: e.target.value })}
+            >
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+            </select>
 
-          {/* Target Input */}
-          {(formData.type === 'numeric' || formData.period !== 'daily') && (
-             <input
-              type="number"
-              placeholder="Target"
-              className="flex-1 min-w-0 text-xs bg-white border border-gray-200 rounded px-2 py-1 outline-none"
-              value={formData.target_value}
-              onChange={(e) => setFormData({ ...formData, target_value: e.target.value })}
+            {(formData.type === 'numeric' || formData.period !== 'daily') && (
+               <input
+                type="number"
+                placeholder="Target"
+                className="w-16 text-xs bg-white border border-gray-200 rounded px-2 py-1 outline-none"
+                value={formData.target_value}
+                onChange={(e) => setFormData({ ...formData, target_value: e.target.value })}
+              />
+            )}
+          </div>
+
+          {/* NEW: Due Date Input */}
+          <div className="flex gap-2 items-center bg-gray-50 p-2 rounded-md border border-gray-100">
+            <Flag size={14} className="text-gray-400" />
+            <input
+              type="date"
+              className="text-xs bg-transparent outline-none text-gray-700 font-medium flex-1"
+              value={formData.due_date}
+              onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
             />
-          )}
+          </div>
         </div>
 
-        {/* DAY PICKER (Only if Weekly) */}
+        {/* Day Picker */}
         {formData.period === 'weekly' && (
           <div className="space-y-2">
              <label className="text-xs text-gray-400 font-medium uppercase tracking-wider">Select Days</label>
@@ -199,13 +200,7 @@ export default function GoalForm({ onGoalAdded, onCancel, initialData = null }) 
                     key={day}
                     type="button"
                     onClick={() => toggleDay(day)}
-                    className={`
-                      w-8 h-8 rounded-full text-[10px] font-bold transition-all
-                      ${isSelected
-                        ? 'bg-blue-600 text-white shadow-sm scale-110'
-                        : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
-                      }
-                    `}
+                    className={`w-8 h-8 rounded-full text-[10px] font-bold transition-all ${isSelected ? 'bg-blue-600 text-white shadow-sm scale-110' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
                    >
                      {day.charAt(0)}
                    </button>
