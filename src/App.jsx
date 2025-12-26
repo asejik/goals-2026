@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth, AuthProvider } from './context/AuthContext';
 import Auth from './components/Auth';
 import { supabase } from './lib/supabase';
-import { Plus, LayoutDashboard, BookOpen, LogOut, ClipboardList } from 'lucide-react';
+import { Plus, LayoutDashboard, BookOpen, LogOut, ClipboardList, Flame } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import GoalForm from './components/goals/GoalForm';
 import GoalList from './components/goals/GoalList';
@@ -18,6 +18,7 @@ function AppContent() {
 
   // Data State
   const [goals, setGoals] = useState([]);
+  const [streak, setStreak] = useState(0); // NEW: Streak State
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(Date.now());
 
@@ -42,30 +43,47 @@ function AppContent() {
     } else if (user?.email) {
       name = user.email.split('@')[0];
     }
-    // Capitalize first letter
     return name.charAt(0).toUpperCase() + name.slice(1);
   };
 
+  // Fetch Goals
   const fetchGoals = async () => {
     try {
       const { data, error } = await supabase
         .from('goals')
         .select('*')
         .order('created_at', { ascending: false });
-
       if (error) throw error;
       setGoals(data);
     } catch (error) {
       console.error('Error fetching goals:', error);
-      toast.error('Failed to load goals');
     } finally {
       setLoading(false);
     }
   };
 
+  // NEW: Fetch Streak using the Database Function
+  const fetchStreak = async () => {
+    try {
+      const { data, error } = await supabase.rpc('get_current_streak');
+      if (error) throw error;
+      setStreak(data || 0);
+    } catch (err) {
+      console.error('Error fetching streak:', err);
+    }
+  };
+
   useEffect(() => {
-    if (user) fetchGoals();
+    if (user) {
+      fetchGoals();
+      fetchStreak(); // Initial fetch
+    }
   }, [user]);
+
+  // Refetch streak whenever data changes (e.g. user checks a box)
+  useEffect(() => {
+    if (user) fetchStreak();
+  }, [lastUpdate]);
 
   const confirmDelete = (id) => {
     setDeleteModal({ isOpen: true, goalId: id });
@@ -124,7 +142,16 @@ function AppContent() {
       {/* DESKTOP NAVIGATION */}
       <nav className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10 hidden md:block">
         <div className="px-6 py-4 flex justify-between items-center">
-          <h1 className="text-xl font-bold text-gray-900 tracking-tight">Align</h1> {/* APP NAME */}
+          <div className="flex items-center gap-6">
+            <h1 className="text-xl font-bold text-gray-900 tracking-tight">Align</h1>
+
+            {/* STREAK BADGE (Desktop) */}
+            <div className="flex items-center gap-1.5 bg-orange-50 text-orange-600 px-3 py-1 rounded-full border border-orange-100" title="Current Streak">
+              <Flame size={16} fill="currentColor" className="animate-pulse" />
+              <span className="text-sm font-bold">{streak} Day{streak !== 1 ? 's' : ''}</span>
+            </div>
+          </div>
+
           <div className="flex items-center gap-4">
             <button
               onClick={() => setShowReview(true)}
@@ -151,7 +178,16 @@ function AppContent() {
 
       {/* MOBILE HEADER */}
       <div className="md:hidden bg-white border-b border-gray-200 p-4 sticky top-0 z-10 flex justify-between items-center shadow-sm">
-        <h1 className="text-lg font-bold text-gray-900 tracking-tight">Align</h1> {/* APP NAME */}
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-bold text-gray-900 tracking-tight">Align</h1>
+
+          {/* STREAK BADGE (Mobile) */}
+          <div className="flex items-center gap-1 bg-orange-50 text-orange-600 px-2 py-1 rounded-full border border-orange-100">
+             <Flame size={14} fill="currentColor" />
+             <span className="text-xs font-bold">{streak}</span>
+          </div>
+        </div>
+
         <div className="flex items-center gap-2">
           <button onClick={() => setShowReview(true)} className="p-2 text-gray-600 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"><ClipboardList size={20} /></button>
           <button onClick={handleAddClick} className="p-2 text-blue-600 bg-blue-50 rounded-full hover:bg-blue-100 transition-colors active:scale-95"><Plus size={20} /></button>
@@ -163,7 +199,7 @@ function AppContent() {
         {activeView === 'dashboard' ? (
           <div className="animate-in fade-in duration-300">
 
-            {/* MOBILE GREETING (Visible only on mobile) */}
+            {/* MOBILE GREETING */}
             <div className="md:hidden mb-2">
               <h2 className="text-2xl font-bold text-gray-900">{getGreeting()}, {getUserName()}</h2>
               <p className="text-xs text-gray-500">Ready to build your legacy?</p>
