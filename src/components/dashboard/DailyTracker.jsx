@@ -9,7 +9,7 @@ const getCurrentDayName = () => {
   return days[new Date().getDay()];
 };
 
-export default function DailyTracker({ onUpdate }) {
+export default function DailyTracker({ onUpdate, lastUpdate }) {
   const { user } = useAuth();
   const today = getTodayString();
   const currentDayName = getCurrentDayName();
@@ -21,7 +21,7 @@ export default function DailyTracker({ onUpdate }) {
 
   useEffect(() => {
     if (user) fetchData();
-  }, [user]);
+  }, [user, lastUpdate]);
 
   const fetchData = async () => {
     try {
