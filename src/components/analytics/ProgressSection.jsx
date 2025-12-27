@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Check, Minus } from 'lucide-react';
+// Removed Check, Minus icons as they are no longer needed
 
 export default function ProgressSection({ lastUpdate }) {
   const [items, setItems] = useState([]);
@@ -28,7 +28,7 @@ export default function ProgressSection({ lastUpdate }) {
       });
 
       const processed = actions.map(action => {
-        // --- SMART TARGET CALCULATION ---
+        // --- SMART TARGET CALCULATION (Unchanged) ---
         let realTarget = action.target_value;
         const normalizedPeriod = action.period ? action.period.toLowerCase() : '';
 
@@ -51,14 +51,14 @@ export default function ProgressSection({ lastUpdate }) {
            }
         }
 
-        // --- PROGRESS ---
+        // --- PROGRESS (Unchanged) ---
         const totalCompleted = action.daily_logs?.filter(l => l.is_complete || l.numeric_value > 0).length || 0;
         let progress = 0;
         if (realTarget > 0) {
            progress = Math.min(100, Math.round((totalCompleted / realTarget) * 100));
         }
 
-        // --- HISTORY ---
+        // --- HISTORY (Unchanged) ---
         const history = last7Days.map(day => {
           const log = action.daily_logs?.find(l => l.log_date === day.dateStr);
           return {
@@ -92,7 +92,6 @@ export default function ProgressSection({ lastUpdate }) {
         Performance & Deadlines
       </h2>
 
-      {/* UPDATED: Changed from space-y-2 to a responsive Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {items.map((item) => (
           <div
@@ -124,25 +123,38 @@ export default function ProgressSection({ lastUpdate }) {
               />
             </div>
 
-            <div className="flex justify-between items-center pt-1">
+            {/* UPDATED INDICATORS SECTION */}
+            <div className="flex justify-between items-center pt-1.5 px-1">
               {item.history.map((day, idx) => {
                 const isToday = idx === 6;
+
+                // Determine styles based on status
+                let ringColor = 'border-gray-300';
+                let dotColor = 'bg-gray-300';
+
+                if (day.status === 'completed') {
+                  ringColor = 'border-green-500'; // Bright Green Ring
+                  dotColor = 'bg-green-500';       // Bright Green Dot
+                } else if (isToday) {
+                  ringColor = 'border-blue-500';  // Bright Blue Ring
+                  dotColor = 'bg-blue-500';       // Bright Blue Dot
+                }
+
                 return (
-                  <div key={idx} className="flex flex-col items-center gap-0.5">
+                  <div key={idx} className="flex flex-col items-center gap-1">
+                    {/* The Ring Container */}
                     <div
                       className={`
-                        w-4 h-4 rounded-full flex items-center justify-center text-[8px] border transition-all
-                        ${day.status === 'completed'
-                          ? 'bg-green-50 border-green-200 text-green-600'
-                          : isToday
-                            ? 'bg-blue-50 border-blue-200 text-blue-600'
-                            : 'bg-gray-50 border-gray-100 text-gray-300'
-                        }
+                        w-3.5 h-3.5 rounded-full flex items-center justify-center border-[1.5px] bg-white transition-all
+                        ${ringColor}
                       `}
                     >
-                      {day.status === 'completed' ? <Check size={8} strokeWidth={4} /> : <Minus size={8} />}
+                      {/* The Inner Dot */}
+                      <div className={`w-[5px] h-[5px] rounded-full ${dotColor}`} />
                     </div>
-                    <span className={`text-[8px] font-bold uppercase ${isToday ? 'text-blue-600' : 'text-gray-300'}`}>
+
+                    {/* Day Label */}
+                    <span className={`text-[8px] font-bold uppercase ${isToday ? 'text-blue-600' : 'text-gray-400'}`}>
                       {day.day}
                     </span>
                   </div>
