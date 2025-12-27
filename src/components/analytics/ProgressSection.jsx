@@ -10,7 +10,7 @@ export default function ProgressSection({ lastUpdate }) {
       const { data: actions } = await supabase
         .from('action_steps')
         .select(`
-          id, title, target_value, period, created_at, end_date,
+          id, title, target_value, period, created_at, end_date, frequency,
           goals ( title ),
           daily_logs ( log_date, is_complete, numeric_value )
         `)
@@ -28,27 +28,39 @@ export default function ProgressSection({ lastUpdate }) {
       });
 
       const processed = actions.map(action => {
-        // 1. Calculate Real Target (UNIVERSAL LOGIC)
+        // --- 1. SMART TARGET CALCULATION ---
         let realTarget = action.target_value;
-
-        // Normalize period to lowercase to catch 'Daily', 'daily', or 'DAILY'
         const normalizedPeriod = action.period ? action.period.toLowerCase() : '';
 
-        // If Daily, target = Total Days from Start (Created) to End
-        if (normalizedPeriod === 'daily' && action.end_date) {
+        if (action.end_date) {
            const start = new Date(action.created_at);
            const end = new Date(action.end_date);
+           const diffTime = Math.max(0, end - start); // Ensure no negative time
+           const totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-           // Calculate difference in milliseconds
-           const diffTime = end - start;
+           if (normalizedPeriod === 'daily') {
+             // Target = Total Days
+             realTarget = totalDays > 0 ? totalDays : 1;
 
-           // Convert to days (and round up to be safe)
-           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+           } else if (normalizedPeriod === 'weekly') {
+             // Target = Total Weeks * Frequency per Week
+             const totalWeeks = Math.ceil(totalDays / 7);
+             // Use target_value as the weekly frequency (e.g., 3 times/week)
+             // Default to 1 if not set
+             const weeklyFreq = action.target_value > 0 ? action.target_value : 1;
+             realTarget = totalWeeks * weeklyFreq;
 
-           // Ensure we don't return 0 or negative numbers if dates are weird
-           realTarget = diffDays > 0 ? diffDays : 1;
+           } else if (normalizedPeriod === 'monthly') {
+             // Target = Total Months * Frequency (usually 1)
+             // Calculate rough months
+             const totalMonths = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+             const monthlyFreq = action.target_value > 0 ? action.target_value : 1;
+             // Ensure at least 1 month counts if duration is short
+             realTarget = Math.max(1, totalMonths) * monthlyFreq;
+           }
         }
 
+        // --- 2. CALCULATE PROGRESS ---
         const totalCompleted = action.daily_logs?.filter(l => l.is_complete || l.numeric_value > 0).length || 0;
 
         let progress = 0;
@@ -56,6 +68,7 @@ export default function ProgressSection({ lastUpdate }) {
            progress = Math.min(100, Math.round((totalCompleted / realTarget) * 100));
         }
 
+        // --- 3. GENERATE HISTORY BUBBLES ---
         const history = last7Days.map(day => {
           const log = action.daily_logs?.find(l => l.log_date === day.dateStr);
           return {
