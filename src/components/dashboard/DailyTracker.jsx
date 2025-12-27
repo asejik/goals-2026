@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { CheckCircle2, Circle, AlertCircle } from 'lucide-react';
+import { CheckCircle2, Check } from 'lucide-react';
 import { toast } from 'sonner';
+
+const FALLBACK_COLORS = {
+  'Health': '#ef4444',
+  'Business': '#3b82f6',
+  'Spiritual': '#8b5cf6',
+  'Learning': '#f59e0b',
+  'Relationships': '#ec4899',
+  'Academic': '#f97316'
+};
 
 export default function DailyTracker({ onUpdate, lastUpdate }) {
   const [actions, setActions] = useState([]);
@@ -17,38 +26,23 @@ export default function DailyTracker({ onUpdate, lastUpdate }) {
       const dateStr = today.toISOString().split('T')[0];
       const dayName = today.toLocaleDateString('en-US', { weekday: 'short' });
 
-      // 1. Fetch ALL Actions
       const { data, error } = await supabase
         .from('action_steps')
         .select(`
           id, title, period, target_value, frequency,
-          goals (
-            title,
-            category,
-            color
-          ),
-          daily_logs (
-            id,
-            is_complete,
-            numeric_value,
-            log_date
-          )
+          goals ( title, category, color ),
+          daily_logs ( id, is_complete, numeric_value, log_date )
         `);
 
       if (error) throw error;
 
-      // 2. Permissive Filter
       const todaysActions = data.filter(action => {
         const period = action.period ? action.period.toLowerCase() : 'daily';
-
         if (period === 'daily') return true;
         if (period === 'monthly') return true;
-
         if (period === 'weekly') {
            if (!action.frequency || action.frequency.length === 0) return true;
-           const freqString = Array.isArray(action.frequency)
-              ? action.frequency.join(',')
-              : (String(action.frequency || ''));
+           const freqString = Array.isArray(action.frequency) ? action.frequency.join(',') : (String(action.frequency || ''));
            return freqString.includes(dayName);
         }
         return true;
@@ -71,100 +65,101 @@ export default function DailyTracker({ onUpdate, lastUpdate }) {
 
     try {
       if (currentLog) {
-        const { error } = await supabase.from('daily_logs').delete().eq('id', currentLog.id);
-        if (error) throw error;
+        await supabase.from('daily_logs').delete().eq('id', currentLog.id);
       } else {
-        const { error } = await supabase.from('daily_logs').insert([{
+        await supabase.from('daily_logs').insert([{
           user_id: user.id,
           action_step_id: action.id,
           log_date: today,
           is_complete: true,
           numeric_value: 1
         }]);
-        if (error) throw error;
       }
       onUpdate();
       fetchTodaysActions();
     } catch (err) {
-      console.error(err);
       toast.error('Failed to update status');
     }
   };
 
-  if (loading) return <div className="p-6 text-center text-gray-400 animate-pulse text-xs">Loading today's focus...</div>;
+  if (loading) return null;
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50/30">
-        <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-          <span>📅 Today's Focus</span>
-        </h2>
+    <div className="space-y-3">
+      {/* UNIFORM HEADER TYPOGRAPHY */}
+      <h2 className="text-sm font-bold text-gray-900 tracking-tight flex items-center justify-between">
+        <span>Today's Focus</span>
         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-          {new Date().toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' })}
+          {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
         </span>
-      </div>
+      </h2>
 
-      <div className="divide-y divide-gray-50">
+      <div className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm">
         {actions.length === 0 ? (
-          <div className="p-6 text-center text-gray-400 flex flex-col items-center gap-2">
-            <CheckCircle2 size={24} className="opacity-20" />
+          <div className="p-6 text-center text-gray-400">
             <p className="text-xs">No actions scheduled.</p>
           </div>
         ) : (
-          actions.map((action) => {
-            const isDone = !!action.currentLog;
-            const categoryColor = action.goals?.color || '#000000';
-            const categoryName = action.goals?.category || 'General';
+          <div className="divide-y divide-gray-50">
+            {actions.map((action) => {
+              const isDone = !!action.currentLog;
+              const categoryName = action.goals?.category || 'General';
 
-            return (
-              <div
-                key={action.id}
-                className={`
-                  group flex items-center justify-between py-2.5 px-4 hover:bg-gray-50 transition-colors cursor-pointer select-none
-                  ${isDone ? 'bg-gray-50/50' : ''}
-                `}
-                onClick={() => toggleAction(action, action.currentLog)}
-              >
-                <div className="flex items-center gap-3">
-                  {/* CHECKBOX */}
-                  <div className={`
-                    w-5 h-5 rounded flex items-center justify-center transition-all duration-300 flex-shrink-0
-                    ${isDone
-                      ? 'bg-green-500 text-white scale-100 shadow-sm'
-                      : 'border-2 border-gray-200 text-transparent scale-95 group-hover:border-gray-300'
-                    }
-                  `}>
-                    <CheckCircle2 size={14} strokeWidth={3} />
-                  </div>
+              let categoryColor = action.goals?.color;
+              if (!categoryColor || categoryColor === '#000000') {
+                 categoryColor = FALLBACK_COLORS[categoryName] || '#6b7280';
+              }
 
-                  {/* TEXT CONTENT */}
-                  <div className={`min-w-0 ${isDone ? 'opacity-50 transition-opacity' : ''}`}>
-                    <h3 className={`text-sm font-bold text-gray-900 truncate ${isDone ? 'line-through text-gray-400' : ''}`}>
-                      {action.title}
-                    </h3>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      {/* CATEGORY BADGE */}
-                      <span
-                        className="text-[9px] font-bold px-1.5 py-px rounded border truncate max-w-[80px]"
-                        style={{
-                          color: categoryColor,
-                          backgroundColor: `${categoryColor}10`,
-                          borderColor: `${categoryColor}20`
-                        }}
-                      >
-                        {categoryName}
-                      </span>
+              return (
+                <div
+                  key={action.id}
+                  onClick={() => toggleAction(action, action.currentLog)}
+                  className={`
+                    group relative flex items-center justify-between py-2 px-3 hover:bg-gray-50 transition-all cursor-pointer select-none
+                    ${isDone ? 'bg-gray-50/50' : 'bg-white'}
+                  `}
+                >
+                  {/* THE COLORED EDGE YOU LIKED */}
+                  <div
+                    className="absolute left-0 top-0 bottom-0 w-[3px]"
+                    style={{ backgroundColor: categoryColor }}
+                  />
 
-                      <span className="text-[10px] text-gray-300">•</span>
-                      <span className="text-[10px] text-gray-400 truncate max-w-[120px] sm:max-w-[200px]">
-                        {action.goals?.title || 'Goal'}
-                      </span>
+                  <div className="flex items-center gap-3 pl-2">
+                    {/* Compact Checkbox */}
+                    <div className={`
+                      w-4 h-4 rounded flex items-center justify-center transition-all duration-300 flex-shrink-0 border
+                      ${isDone
+                        ? 'bg-green-500 border-green-500 text-white'
+                        : 'bg-white border-gray-300 text-transparent group-hover:border-gray-400'
+                      }
+                    `}>
+                      <Check size={10} strokeWidth={4} />
+                    </div>
+
+                    {/* Compact Text */}
+                    <div className="min-w-0">
+                      <h3 className={`text-sm font-bold text-gray-900 truncate leading-tight ${isDone ? 'line-through text-gray-400' : ''}`}>
+                        {action.title}
+                      </h3>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span
+                          className="text-[9px] font-bold uppercase tracking-wide opacity-80"
+                          style={{ color: categoryColor }}
+                        >
+                          {categoryName}
+                        </span>
+                        <span className="text-[9px] text-gray-300">•</span>
+                        <span className="text-[10px] text-gray-400 truncate max-w-[150px]">
+                          {action.goals?.title}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            );
-          })
+              );
+            })}
+          </div>
         )}
       </div>
     </div>
