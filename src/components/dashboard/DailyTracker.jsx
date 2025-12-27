@@ -86,7 +86,7 @@ export default function DailyTracker({ onUpdate, lastUpdate }) {
 
   return (
     <div className="space-y-3">
-      {/* UNIFORM HEADER TYPOGRAPHY */}
+      {/* Header */}
       <h2 className="text-sm font-bold text-gray-900 tracking-tight flex items-center justify-between">
         <span>Today's Focus</span>
         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
@@ -94,74 +94,75 @@ export default function DailyTracker({ onUpdate, lastUpdate }) {
         </span>
       </h2>
 
-      <div className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm">
-        {actions.length === 0 ? (
-          <div className="p-6 text-center text-gray-400">
-            <p className="text-xs">No actions scheduled.</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-50">
-            {actions.map((action) => {
-              const isDone = !!action.currentLog;
-              const categoryName = action.goals?.category || 'General';
+      {/* Grid Container */}
+      {actions.length === 0 ? (
+        <div className="p-6 text-center text-gray-400 bg-white border border-gray-100 rounded-xl">
+          <p className="text-xs">No actions scheduled.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {actions.map((action) => {
+            const isDone = !!action.currentLog;
+            const categoryName = action.goals?.category || 'General';
 
-              let categoryColor = action.goals?.color;
-              if (!categoryColor || categoryColor === '#000000') {
-                 categoryColor = FALLBACK_COLORS[categoryName] || '#6b7280';
-              }
+            let categoryColor = action.goals?.color;
+            if (!categoryColor || categoryColor === '#000000') {
+               categoryColor = FALLBACK_COLORS[categoryName] || '#6b7280';
+            }
 
-              return (
+            return (
+              <div
+                key={action.id}
+                onClick={() => toggleAction(action, action.currentLog)}
+                className={`
+                  group relative flex items-center justify-between py-2.5 px-3
+                  bg-white border border-gray-100 rounded-xl shadow-sm hover:shadow-md hover:border-gray-200
+                  transition-all cursor-pointer select-none overflow-hidden
+                  ${isDone ? 'opacity-70' : ''}
+                `}
+              >
+                {/* The Colored Edge */}
                 <div
-                  key={action.id}
-                  onClick={() => toggleAction(action, action.currentLog)}
-                  className={`
-                    group relative flex items-center justify-between py-2 px-3 hover:bg-gray-50 transition-all cursor-pointer select-none
-                    ${isDone ? 'bg-gray-50/50' : 'bg-white'}
-                  `}
-                >
-                  {/* THE COLORED EDGE YOU LIKED */}
-                  <div
-                    className="absolute left-0 top-0 bottom-0 w-[3px]"
-                    style={{ backgroundColor: categoryColor }}
-                  />
+                  className="absolute left-0 top-0 bottom-0 w-[4px]"
+                  style={{ backgroundColor: categoryColor }}
+                />
 
-                  <div className="flex items-center gap-3 pl-2">
-                    {/* Compact Checkbox */}
-                    <div className={`
-                      w-4 h-4 rounded flex items-center justify-center transition-all duration-300 flex-shrink-0 border
-                      ${isDone
-                        ? 'bg-green-500 border-green-500 text-white'
-                        : 'bg-white border-gray-300 text-transparent group-hover:border-gray-400'
-                      }
-                    `}>
-                      <Check size={10} strokeWidth={4} />
-                    </div>
+                <div className="flex items-center gap-3 pl-2 w-full">
+                  {/* Compact Checkbox */}
+                  <div className={`
+                    w-4 h-4 rounded flex items-center justify-center transition-all duration-300 flex-shrink-0 border
+                    ${isDone
+                      ? 'bg-green-500 border-green-500 text-white'
+                      : 'bg-white border-gray-300 text-transparent group-hover:border-gray-400'
+                    }
+                  `}>
+                    <Check size={10} strokeWidth={4} />
+                  </div>
 
-                    {/* Compact Text */}
-                    <div className="min-w-0">
-                      <h3 className={`text-sm font-bold text-gray-900 truncate leading-tight ${isDone ? 'line-through text-gray-400' : ''}`}>
-                        {action.title}
-                      </h3>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span
-                          className="text-[9px] font-bold uppercase tracking-wide opacity-80"
-                          style={{ color: categoryColor }}
-                        >
-                          {categoryName}
-                        </span>
-                        <span className="text-[9px] text-gray-300">•</span>
-                        <span className="text-[10px] text-gray-400 truncate max-w-[150px]">
-                          {action.goals?.title}
-                        </span>
-                      </div>
+                  {/* Text Content */}
+                  <div className="min-w-0 flex-1">
+                    <h3 className={`text-sm font-bold text-gray-900 truncate leading-tight ${isDone ? 'line-through text-gray-400' : ''}`}>
+                      {action.title}
+                    </h3>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span
+                        className="text-[9px] font-bold uppercase tracking-wide opacity-80"
+                        style={{ color: categoryColor }}
+                      >
+                        {categoryName}
+                      </span>
+                      <span className="text-[9px] text-gray-300">•</span>
+                      <span className="text-[10px] text-gray-400 truncate">
+                        {action.goals?.title}
+                      </span>
                     </div>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

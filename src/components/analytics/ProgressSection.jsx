@@ -28,47 +28,37 @@ export default function ProgressSection({ lastUpdate }) {
       });
 
       const processed = actions.map(action => {
-        // --- 1. SMART TARGET CALCULATION ---
+        // --- SMART TARGET CALCULATION ---
         let realTarget = action.target_value;
         const normalizedPeriod = action.period ? action.period.toLowerCase() : '';
 
         if (action.end_date) {
            const start = new Date(action.created_at);
            const end = new Date(action.end_date);
-           const diffTime = Math.max(0, end - start); // Ensure no negative time
+           const diffTime = Math.max(0, end - start);
            const totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
            if (normalizedPeriod === 'daily') {
-             // Target = Total Days
              realTarget = totalDays > 0 ? totalDays : 1;
-
            } else if (normalizedPeriod === 'weekly') {
-             // Target = Total Weeks * Frequency per Week
              const totalWeeks = Math.ceil(totalDays / 7);
-             // Use target_value as the weekly frequency (e.g., 3 times/week)
-             // Default to 1 if not set
              const weeklyFreq = action.target_value > 0 ? action.target_value : 1;
              realTarget = totalWeeks * weeklyFreq;
-
            } else if (normalizedPeriod === 'monthly') {
-             // Target = Total Months * Frequency (usually 1)
-             // Calculate rough months
              const totalMonths = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
              const monthlyFreq = action.target_value > 0 ? action.target_value : 1;
-             // Ensure at least 1 month counts if duration is short
              realTarget = Math.max(1, totalMonths) * monthlyFreq;
            }
         }
 
-        // --- 2. CALCULATE PROGRESS ---
+        // --- PROGRESS ---
         const totalCompleted = action.daily_logs?.filter(l => l.is_complete || l.numeric_value > 0).length || 0;
-
         let progress = 0;
         if (realTarget > 0) {
            progress = Math.min(100, Math.round((totalCompleted / realTarget) * 100));
         }
 
-        // --- 3. GENERATE HISTORY BUBBLES ---
+        // --- HISTORY ---
         const history = last7Days.map(day => {
           const log = action.daily_logs?.find(l => l.log_date === day.dateStr);
           return {
@@ -102,7 +92,8 @@ export default function ProgressSection({ lastUpdate }) {
         Performance & Deadlines
       </h2>
 
-      <div className="space-y-2">
+      {/* UPDATED: Changed from space-y-2 to a responsive Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {items.map((item) => (
           <div
             key={item.id}
