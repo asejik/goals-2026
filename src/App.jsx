@@ -2,7 +2,16 @@ import { useEffect, useState } from 'react';
 import { useAuth, AuthProvider } from './context/AuthContext';
 import Auth from './components/Auth';
 import { supabase } from './lib/supabase';
-import { Plus, LayoutDashboard, BookOpen, LogOut, ClipboardList, Flame, Trophy } from 'lucide-react';
+import {
+  Plus,
+  LayoutDashboard,
+  BookOpen,
+  LogOut,
+  ClipboardList,
+  Flame,
+  Trophy,
+  Trash2
+} from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 
 // Components
@@ -29,6 +38,7 @@ function AppContent() {
   const [showForm, setShowForm] = useState(false);
   const [editingGoal, setEditingGoal] = useState(null);
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, goalId: null });
+  const [showResetConfirm, setShowResetConfirm] = useState(false); // NEW: Reset State
   const [activeView, setActiveView] = useState('dashboard');
   const [showReview, setShowReview] = useState(false);
   const [showMilestones, setShowMilestones] = useState(false);
@@ -73,7 +83,6 @@ function AppContent() {
 
   const fetchStreak = async () => {
     try {
-      // Call the SQL function we created
       const { data, error } = await supabase.rpc('get_current_streak');
       if (error) throw error;
       setStreak(data || 0);
@@ -89,7 +98,6 @@ function AppContent() {
     }
   }, [user]);
 
-  // Refetch streak when logs update
   useEffect(() => {
     if (user) fetchStreak();
   }, [lastUpdate, user]);
@@ -110,6 +118,25 @@ function AppContent() {
     if (error) {
       toast.error('Error deleting goal');
       fetchGoals();
+    }
+  };
+
+  // NEW: Handle Full Account Reset
+  const handleResetAccount = async () => {
+    try {
+      const { error } = await supabase.rpc('reset_user_data');
+      if (error) throw error;
+
+      toast.success('Account reset successfully');
+      setShowResetConfirm(false);
+
+      // Refresh local state immediately
+      setGoals([]);
+      setStreak(0);
+      setLastUpdate(Date.now());
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to reset account');
     }
   };
 
@@ -141,7 +168,7 @@ function AppContent() {
       {/* 1. GLOBAL BACKGROUND (Grid Pattern) */}
       <div className="fixed inset-0 z-0 pointer-events-none bg-grid-pattern opacity-60" />
 
-      {/* MODALS (Keep existing) */}
+      {/* MODALS */}
       <ConfirmModal
         isOpen={deleteModal.isOpen}
         onClose={() => setDeleteModal({ ...deleteModal, isOpen: false })}
@@ -151,6 +178,18 @@ function AppContent() {
         confirmText="Delete Forever"
         isDestructive={true}
       />
+
+      {/* RESET CONFIRM MODAL */}
+      <ConfirmModal
+        isOpen={showResetConfirm}
+        onClose={() => setShowResetConfirm(false)}
+        onConfirm={handleResetAccount}
+        title="Reset Account?"
+        message="DANGER: This will delete ALL your goals, logs, and reviews. This cannot be undone."
+        confirmText="Yes, Wipe Everything"
+        isDestructive={true}
+      />
+
       {showReview && <WeeklyReviewModal onClose={() => setShowReview(false)} />}
       {showMilestones && <MilestonesModal onClose={() => setShowMilestones(false)} />}
 
@@ -187,7 +226,18 @@ function AppContent() {
               <ClipboardList size={14} />
               Weekly Review
             </button>
+
             <div className="h-4 w-px bg-gray-200 mx-2"></div>
+
+            {/* Reset Button (Desktop) */}
+            <button
+              onClick={() => setShowResetConfirm(true)}
+              className="text-gray-300 hover:text-red-500 transition-colors"
+              title="Reset Account Data"
+            >
+              <Trash2 size={16} />
+            </button>
+
             <span className="text-xs font-medium text-gray-500">
               {getGreeting()}, <span className="text-gray-900 font-semibold">{getUserName()}</span>
             </span>
@@ -213,13 +263,13 @@ function AppContent() {
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-bold tracking-tight text-gray-900">Align</h1>
           <div className="flex items-center gap-1 bg-orange-50/50 text-orange-600 px-2 py-0.5 rounded-full border border-orange-100/50">
-            <Flame size={12} fill="currentColor" />
-            <span className="text-[10px] font-bold font-mono">{streak}</span>
+             <Flame size={12} fill="currentColor" />
+             <span className="text-[10px] font-bold font-mono">{streak}</span>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* NEW: More explicit Weekly Review Button */}
+          {/* Mobile Weekly Review Button */}
           <button
             onClick={() => setShowReview(true)}
             className="flex items-center gap-1 bg-gray-100 text-gray-600 px-2 py-1.5 rounded-full hover:bg-gray-200 transition-colors"
@@ -230,8 +280,17 @@ function AppContent() {
 
           <button onClick={handleAddClick} className="btn-beam p-1.5 text-white bg-gray-900 rounded-full hover:bg-black transition-all shadow-md active:scale-95"><Plus size={18} /></button>
 
-          {/* Trophy moved here to save space, or keep in left group if preferred */}
           <button onClick={() => setShowMilestones(true)} className="p-1.5 text-gray-400 hover:text-yellow-600"><Trophy size={18} /></button>
+
+          {/* Mobile Reset Button */}
+          <button
+            onClick={() => setShowResetConfirm(true)}
+            className="p-1.5 text-gray-300 hover:text-red-500 transition-colors"
+          >
+            <Trash2 size={18} />
+          </button>
+
+           <button onClick={signOut} className="p-1.5 text-gray-300 hover:text-red-500 transition-colors"><LogOut size={18} /></button>
         </div>
       </div>
 
@@ -290,7 +349,6 @@ function AppContent() {
                 <div className="text-center py-12 text-gray-400 text-sm animate-pulse">Loading your vision...</div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Note: I'm assuming GoalList maps internally, but we'll wrap it for grid layout control if needed */}
                   <GoalList goals={goals} onDelete={confirmDelete} onEdit={handleEdit} />
                 </div>
               )}

@@ -1,143 +1,156 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../context/AuthContext';
-import { Target, Calendar, AlertCircle } from 'lucide-react';
+import { Check, X, Minus } from 'lucide-react';
 
 export default function ProgressSection({ lastUpdate }) {
-  const { user } = useAuth();
-  const [stats, setStats] = useState([]);
+  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user) calculateStats();
-  }, [user, lastUpdate]);
+    fetchProgress();
+  }, [lastUpdate]);
 
-  const calculateStats = async () => {
-    const { data: actions } = await supabase
-      .from('action_steps')
-      .select('*, goals (title, categories(name))');
+  const fetchProgress = async () => {
+    try {
+      // 1. Get Action Steps with their Goal info
+      const { data: actions, error } = await supabase
+        .from('action_steps')
+        .select(`
+          id, title, target_value, period, created_at,
+          goals ( title ),
+          daily_logs ( log_date, is_complete, numeric_value )
+        `)
+        .order('created_at', { ascending: false });
 
-    if (!actions || actions.length === 0) {
+      if (error) throw error;
+
+      // 2. Generate Last 7 Days Array (reverse chronological)
+      const last7Days = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() - (6 - i)); // -6 to 0 (Today)
+        return {
+          dateObj: d,
+          dateStr: d.toISOString().split('T')[0],
+          dayName: d.toLocaleDateString('en-US', { weekday: 'short' }) // "Mon", "Tue"
+        };
+      });
+
+      // 3. Process Data
+      const processed = actions.map(action => {
+        // Calculate Progress (Existing Logic)
+        const totalCompleted = action.daily_logs?.filter(l => l.is_complete || l.numeric_value > 0).length || 0;
+        let progress = 0;
+        if (action.target_value > 0) {
+           progress = Math.min(100, Math.round((totalCompleted / action.target_value) * 100));
+        }
+
+        // Map Logs to Last 7 Days
+        const history = last7Days.map(day => {
+          const log = action.daily_logs?.find(l => l.log_date === day.dateStr);
+          const isDone = log?.is_complete || (log?.numeric_value > 0);
+          return {
+            day: day.dayName,
+            date: day.dateStr,
+            status: isDone ? 'completed' : 'missed' // Simple logic: if logged, done. Else missed.
+          };
+        });
+
+        // Determine Deadline (Existing Logic)
+        let daysRemaining = null;
+        let isOverdue = false;
+        // (Simple deadline logic can be expanded if you have due_dates on actions)
+
+        return {
+          id: action.id,
+          title: action.title,
+          goalTitle: action.goals?.title,
+          progress,
+          history, // NEW: 7-Day History
+          totalCompleted,
+          target: action.target_value
+        };
+      });
+
+      setItems(processed);
+    } catch (error) {
+      console.error('Error fetching progress:', error);
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const { data: logs } = await supabase
-      .from('daily_logs')
-      .select('action_step_id, numeric_value, is_complete');
-
-    const computed = actions.map(action => {
-      const actionLogs = logs?.filter(l => l.action_step_id === action.id) || [];
-
-      let totalDone = 0;
-      if (action.type === 'boolean') {
-        totalDone = actionLogs.filter(l => l.is_complete).length;
-      } else {
-        totalDone = actionLogs.reduce((acc, curr) => acc + (curr.numeric_value || 0), 0);
-      }
-
-      let estimatedTotalTarget = action.target_value;
-      if (action.period === 'daily') estimatedTotalTarget = 30;
-      if (action.period === 'weekly') estimatedTotalTarget = 12;
-      if (action.period === 'onetime') estimatedTotalTarget = action.target_value;
-
-      const percentage = estimatedTotalTarget ? Math.min(100, Math.round((totalDone / estimatedTotalTarget) * 100)) : 0;
-
-      let daysRemaining = null;
-      let isOverdue = false;
-      if (action.end_date) {
-        const today = new Date();
-        const due = new Date(action.end_date);
-        const diffTime = due - today;
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        daysRemaining = diffDays;
-        if (diffDays < 0) isOverdue = true;
-      }
-
-      return {
-        ...action,
-        totalDone,
-        percentage,
-        daysRemaining,
-        isOverdue,
-        goalTitle: action.goals?.title,
-        categoryName: action.goals?.categories?.name
-      };
-    });
-
-    setStats(computed);
-    setLoading(false);
   };
 
-  if (loading) return null;
-  if (stats.length === 0) return null;
+  if (loading) return <div className="p-4 text-center text-sm text-gray-400">Loading progress...</div>;
+  if (items.length === 0) return null;
 
   return (
-    <div className="mb-12 animate-in fade-in duration-500">
-      <h2 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
-        <Target size={16} className="text-gray-700" />
-        Performance & Deadlines
+    <div className="space-y-6">
+      <h2 className="text-lg font-bold text-gray-900 tracking-tight flex items-center gap-2">
+        <span>Performance & Deadlines</span>
       </h2>
 
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
-        {/* Header - Desktop Only */}
-        <div className="hidden sm:grid grid-cols-12 gap-4 px-4 py-3 bg-gray-50 border-b border-gray-100 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
-          <div className="col-span-5">Action Step</div>
-          <div className="col-span-4">Progress</div>
-          <div className="col-span-3 text-right">Deadline</div>
-        </div>
-
-        <div className="divide-y divide-gray-50">
-          {stats.map(stat => (
-            <div key={stat.id} className="p-4 sm:py-3 hover-card rounded-lg transition-all border border-transparent hover:border-gray-100 hover:bg-white hover:shadow-sm mb-1" // Updated Classes
->
-
-              {/* DESKTOP VIEW (Grid) */}
-              <div className="hidden sm:grid grid-cols-12 gap-4 items-center">
-                 <div className="col-span-5 min-w-0">
-                    <p className="text-sm font-medium text-gray-800 truncate">{stat.title}</p>
-                    <p className="text-[10px] text-gray-400 mt-0.5 truncate">{stat.categoryName} • {stat.goalTitle}</p>
-                 </div>
-                 <div className="col-span-4">
-                    <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full transition-all duration-1000 ${stat.totalDone > 0 ? 'bg-blue-600' : 'bg-gray-200'}`} style={{ width: `${Math.min(100, stat.totalDone * 5)}%` }} />
-                    </div>
-                    <p className="text-[10px] text-gray-400 mt-1">{stat.totalDone} done</p>
-                 </div>
-                 <div className="col-span-3 flex justify-end">
-                    {stat.end_date ? (
-                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${stat.isOverdue ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-600'}`}>
-                        {stat.daysRemaining} Days Left
-                      </span>
-                    ) : <span className="text-[10px] text-gray-300">-</span>}
-                 </div>
+      <div className="space-y-4">
+        {items.map((item) => (
+          <div
+            key={item.id}
+            className="p-4 bg-white border border-gray-100 rounded-xl hover:shadow-md transition-all duration-300"
+          >
+            {/* Header */}
+            <div className="flex justify-between items-start mb-3">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">{item.title}</h3>
+                <p className="text-xs text-gray-500">{item.goalTitle}</p>
               </div>
+              <div className="text-right">
+                <span className="text-xs font-bold text-gray-900">{item.totalCompleted}</span>
+                <span className="text-[10px] text-gray-400"> / {item.target > 0 ? item.target : '∞'} completed</span>
+              </div>
+            </div>
 
-              {/* MOBILE VIEW (Compact Flex Row) */}
-              <div className="sm:hidden flex justify-between items-center gap-4">
-                 <div className="min-w-0 flex-1">
-                    <div className="flex flex-col gap-0.5 mb-1">
-                      <p className="text-sm font-bold text-gray-900 truncate">{stat.title}</p>
-                      {stat.end_date && (
-                         <span className={`text-[10px] font-bold px-1.5 rounded ${stat.isOverdue ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>
-                           {stat.daysRemaining} Days Left
-                         </span>
+            {/* Progress Bar */}
+            <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden mb-4">
+              <div
+                className="h-full bg-gray-900 rounded-full transition-all duration-1000 ease-out"
+                style={{ width: `${item.progress}%` }}
+              />
+            </div>
+
+            {/* NEW: 7-Day History Bubbles */}
+            <div className="flex justify-between items-center pt-2 border-t border-gray-50">
+              {item.history.map((day, idx) => {
+                const isToday = idx === 6; // Last item is today
+                return (
+                  <div key={day.date} className="flex flex-col items-center gap-1">
+                    {/* Status Bubble */}
+                    <div
+                      className={`
+                        w-6 h-6 rounded-full flex items-center justify-center text-[10px] border transition-all
+                        ${day.status === 'completed'
+                          ? 'bg-green-50 border-green-200 text-green-600'
+                          : isToday
+                            ? 'bg-blue-50 border-blue-200 text-blue-600 ring-2 ring-blue-100' // Highlight Today
+                            : 'bg-gray-50 border-gray-100 text-gray-300'
+                        }
+                      `}
+                    >
+                      {day.status === 'completed' ? (
+                        <Check size={12} strokeWidth={3} />
+                      ) : isToday ? (
+                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
+                      ) : (
+                        <Minus size={12} />
                       )}
                     </div>
-                    <p className="text-[10px] text-gray-400 truncate">{stat.goalTitle}</p>
-                 </div>
-
-                 <div className="w-24 text-right">
-                    <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden mb-1">
-                       <div className={`h-full rounded-full ${stat.totalDone > 0 ? 'bg-blue-600' : 'bg-gray-200'}`} style={{ width: `${Math.min(100, stat.totalDone * 5)}%` }} />
-                    </div>
-                    <p className="text-[10px] text-gray-500 font-medium">{stat.totalDone} completed</p>
-                 </div>
-              </div>
-
+                    {/* Day Label */}
+                    <span className={`text-[9px] font-medium uppercase ${isToday ? 'text-blue-600' : 'text-gray-400'}`}>
+                      {day.day.charAt(0)}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
-          ))}
-        </div>
+
+          </div>
+        ))}
       </div>
     </div>
   );
