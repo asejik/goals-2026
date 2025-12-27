@@ -138,7 +138,7 @@ export default function DailyTracker({ onUpdate, lastUpdate }) {
               className={`
                 flex items-center justify-between p-3 gap-3 transition-colors
                 ${index !== visibleActions.length - 1 ? 'border-b border-gray-100' : ''}
-                ${isDone ? 'bg-green-50/40' : 'hover:bg-gray-50'}
+                ${isDone ? 'bg-green-50/40' : 'hover:bg-gray-50 hover-card'}
               `}
             >
               {/* Left: Checkbox & Details */}

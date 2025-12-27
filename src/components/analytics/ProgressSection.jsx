@@ -89,7 +89,8 @@ export default function ProgressSection({ lastUpdate }) {
 
         <div className="divide-y divide-gray-50">
           {stats.map(stat => (
-            <div key={stat.id} className="p-4 sm:py-3 hover:bg-gray-50/50 transition-colors">
+            <div key={stat.id} className="p-4 sm:py-3 hover-card rounded-lg transition-all border border-transparent hover:border-gray-100 hover:bg-white hover:shadow-sm mb-1" // Updated Classes
+>
 
               {/* DESKTOP VIEW (Grid) */}
               <div className="hidden sm:grid grid-cols-12 gap-4 items-center">
@@ -115,11 +116,11 @@ export default function ProgressSection({ lastUpdate }) {
               {/* MOBILE VIEW (Compact Flex Row) */}
               <div className="sm:hidden flex justify-between items-center gap-4">
                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex flex-col gap-0.5 mb-1">
                       <p className="text-sm font-bold text-gray-900 truncate">{stat.title}</p>
                       {stat.end_date && (
                          <span className={`text-[10px] font-bold px-1.5 rounded ${stat.isOverdue ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>
-                           {stat.daysRemaining}d
+                           {stat.daysRemaining} Days Left
                          </span>
                       )}
                     </div>

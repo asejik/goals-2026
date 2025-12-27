@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { useAuth, AuthProvider } from './context/AuthContext';
 import Auth from './components/Auth';
 import { supabase } from './lib/supabase';
-import { Plus, LayoutDashboard, BookOpen, LogOut, ClipboardList, Flame } from 'lucide-react';
+import { Plus, LayoutDashboard, BookOpen, LogOut, ClipboardList, Flame, Trophy } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
+
+// Components
 import GoalForm from './components/goals/GoalForm';
 import GoalList from './components/goals/GoalList';
 import DailyTracker from './components/dashboard/DailyTracker';
@@ -12,13 +14,14 @@ import ProgressSection from './components/analytics/ProgressSection';
 import AiCoach from './components/dashboard/AiCoach';
 import ConfirmModal from './components/ui/ConfirmModal';
 import WeeklyReviewModal from './components/dashboard/WeeklyReviewModal';
+import MilestonesModal from './components/dashboard/MilestonesModal';
 
 function AppContent() {
   const { user, signOut } = useAuth();
 
   // Data State
   const [goals, setGoals] = useState([]);
-  const [streak, setStreak] = useState(0); // NEW: Streak State
+  const [streak, setStreak] = useState(0);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(Date.now());
 
@@ -28,6 +31,9 @@ function AppContent() {
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, goalId: null });
   const [activeView, setActiveView] = useState('dashboard');
   const [showReview, setShowReview] = useState(false);
+  const [showMilestones, setShowMilestones] = useState(false);
+
+  // --- HELPERS ---
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -46,25 +52,28 @@ function AppContent() {
     return name.charAt(0).toUpperCase() + name.slice(1);
   };
 
-  // Fetch Goals
+  // --- DATA FETCHING ---
+
   const fetchGoals = async () => {
     try {
       const { data, error } = await supabase
         .from('goals')
         .select('*')
         .order('created_at', { ascending: false });
+
       if (error) throw error;
       setGoals(data);
     } catch (error) {
       console.error('Error fetching goals:', error);
+      toast.error('Failed to load goals');
     } finally {
       setLoading(false);
     }
   };
 
-  // NEW: Fetch Streak using the Database Function
   const fetchStreak = async () => {
     try {
+      // Call the SQL function we created
       const { data, error } = await supabase.rpc('get_current_streak');
       if (error) throw error;
       setStreak(data || 0);
@@ -76,14 +85,16 @@ function AppContent() {
   useEffect(() => {
     if (user) {
       fetchGoals();
-      fetchStreak(); // Initial fetch
+      fetchStreak();
     }
   }, [user]);
 
-  // Refetch streak whenever data changes (e.g. user checks a box)
+  // Refetch streak when logs update
   useEffect(() => {
     if (user) fetchStreak();
-  }, [lastUpdate]);
+  }, [lastUpdate, user]);
+
+  // --- HANDLERS ---
 
   const confirmDelete = (id) => {
     setDeleteModal({ isOpen: true, goalId: id });
@@ -124,9 +135,13 @@ function AppContent() {
   if (!user) return <Auth />;
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans pb-24 md:pb-0">
-      <Toaster position="top-center" richColors />
+    <div className="min-h-screen bg-white text-gray-900 font-sans selection:bg-gray-900 selection:text-white pb-24 md:pb-0 relative">
+      <Toaster position="top-center" richColors theme="light" />
 
+      {/* 1. GLOBAL BACKGROUND (Grid Pattern) */}
+      <div className="fixed inset-0 z-0 pointer-events-none bg-grid-pattern opacity-60" />
+
+      {/* MODALS (Keep existing) */}
       <ConfirmModal
         isOpen={deleteModal.isOpen}
         onClose={() => setDeleteModal({ ...deleteModal, isOpen: false })}
@@ -136,127 +151,168 @@ function AppContent() {
         confirmText="Delete Forever"
         isDestructive={true}
       />
-
       {showReview && <WeeklyReviewModal onClose={() => setShowReview(false)} />}
+      {showMilestones && <MilestonesModal onClose={() => setShowMilestones(false)} />}
 
-      {/* DESKTOP NAVIGATION */}
-      <nav className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10 hidden md:block">
-        <div className="px-6 py-4 flex justify-between items-center">
+      {/* DESKTOP NAV (Glass Panel) */}
+      <nav className="glass-panel sticky top-0 z-20 hidden md:block border-b border-gray-100">
+        <div className="max-w-5xl mx-auto px-6 py-4 flex justify-between items-center">
+
+          {/* Brand */}
           <div className="flex items-center gap-6">
-            <h1 className="text-xl font-bold text-gray-900 tracking-tight">Align</h1>
+            <h1 className="text-xl font-bold tracking-tight text-gray-900">Align</h1>
 
-            {/* STREAK BADGE (Desktop) */}
-            <div className="flex items-center gap-1.5 bg-orange-50 text-orange-600 px-3 py-1 rounded-full border border-orange-100" title="Current Streak">
-              <Flame size={16} fill="currentColor" className="animate-pulse" />
-              <span className="text-sm font-bold">{streak} Day{streak !== 1 ? 's' : ''}</span>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 bg-orange-50/50 text-orange-600 px-3 py-1 rounded-full border border-orange-100/50 hover:bg-orange-50 transition-colors cursor-default" title="Current Streak">
+                <Flame size={14} fill="currentColor" className="animate-pulse" />
+                <span className="text-xs font-bold font-mono tracking-tight">{streak}d</span>
+              </div>
+
+              <button
+                onClick={() => setShowMilestones(true)}
+                className="p-1.5 text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 rounded-full transition-colors relative group"
+              >
+                <Trophy size={16} />
+                <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Achievements</span>
+              </button>
             </div>
           </div>
 
+          {/* Right Actions */}
           <div className="flex items-center gap-4">
             <button
               onClick={() => setShowReview(true)}
-              className="text-xs font-bold bg-gray-900 text-white px-3 py-1.5 rounded-lg hover:bg-black transition-colors flex items-center gap-2"
+              className="btn-beam text-xs font-bold bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-black transition-all shadow-lg shadow-gray-200 flex items-center gap-2"
             >
               <ClipboardList size={14} />
               Weekly Review
             </button>
-            <span className="text-sm font-medium text-gray-600 border-l border-gray-200 pl-4 ml-2">
-              {getGreeting()}, {getUserName()}
+            <div className="h-4 w-px bg-gray-200 mx-2"></div>
+            <span className="text-xs font-medium text-gray-500">
+              {getGreeting()}, <span className="text-gray-900 font-semibold">{getUserName()}</span>
             </span>
-            <button onClick={signOut} className="text-sm text-gray-400 hover:text-gray-800 transition-colors">Sign Out</button>
+            <button onClick={signOut} className="text-xs text-gray-400 hover:text-red-500 transition-colors ml-2">Sign Out</button>
           </div>
         </div>
-        <div className="px-6 flex gap-6 text-sm font-medium border-t border-gray-100">
-          <button onClick={() => setActiveView('dashboard')} className={`py-3 flex items-center gap-2 border-b-2 transition-colors ${activeView === 'dashboard' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-            <LayoutDashboard size={16} /> Dashboard
+
+        {/* Sub-Nav */}
+        <div className="max-w-5xl mx-auto px-6 flex gap-8 text-sm font-medium border-t border-gray-100/50">
+          <button onClick={() => setActiveView('dashboard')} className={`py-3 relative group transition-colors ${activeView === 'dashboard' ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+            <span className="flex items-center gap-2"><LayoutDashboard size={14} /> Dashboard</span>
+            {activeView === 'dashboard' && <span className="absolute bottom-0 left-0 w-full h-[2px] bg-gray-900 rounded-t-full animate-fade-in" />}
           </button>
-          <button onClick={() => setActiveView('journal')} className={`py-3 flex items-center gap-2 border-b-2 transition-colors ${activeView === 'journal' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-            <BookOpen size={16} /> Journal
+          <button onClick={() => setActiveView('journal')} className={`py-3 relative group transition-colors ${activeView === 'journal' ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+            <span className="flex items-center gap-2"><BookOpen size={14} /> Journal</span>
+            {activeView === 'journal' && <span className="absolute bottom-0 left-0 w-full h-[2px] bg-gray-900 rounded-t-full animate-fade-in" />}
           </button>
         </div>
       </nav>
 
-      {/* MOBILE HEADER */}
-      <div className="md:hidden bg-white border-b border-gray-200 p-4 sticky top-0 z-10 flex justify-between items-center shadow-sm">
+      {/* MOBILE HEADER (Glass) */}
+      <div className="md:hidden glass-panel sticky top-0 z-20 border-b border-gray-100 p-4 flex justify-between items-center">
         <div className="flex items-center gap-3">
-          <h1 className="text-lg font-bold text-gray-900 tracking-tight">Align</h1>
-
-          {/* STREAK BADGE (Mobile) */}
-          <div className="flex items-center gap-1 bg-orange-50 text-orange-600 px-2 py-1 rounded-full border border-orange-100">
-             <Flame size={14} fill="currentColor" />
-             <span className="text-xs font-bold">{streak}</span>
+          <h1 className="text-lg font-bold tracking-tight text-gray-900">Align</h1>
+          <div className="flex items-center gap-1 bg-orange-50/50 text-orange-600 px-2 py-0.5 rounded-full border border-orange-100/50">
+            <Flame size={12} fill="currentColor" />
+            <span className="text-[10px] font-bold font-mono">{streak}</span>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowReview(true)} className="p-2 text-gray-600 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"><ClipboardList size={20} /></button>
-          <button onClick={handleAddClick} className="p-2 text-blue-600 bg-blue-50 rounded-full hover:bg-blue-100 transition-colors active:scale-95"><Plus size={20} /></button>
-          <button onClick={signOut} className="p-2 text-gray-400 hover:text-red-600 transition-colors"><LogOut size={20} /></button>
+          {/* NEW: More explicit Weekly Review Button */}
+          <button
+            onClick={() => setShowReview(true)}
+            className="flex items-center gap-1 bg-gray-100 text-gray-600 px-2 py-1.5 rounded-full hover:bg-gray-200 transition-colors"
+          >
+            <ClipboardList size={14} />
+            <span className="text-[10px] font-bold">Review</span>
+          </button>
+
+          <button onClick={handleAddClick} className="btn-beam p-1.5 text-white bg-gray-900 rounded-full hover:bg-black transition-all shadow-md active:scale-95"><Plus size={18} /></button>
+
+          {/* Trophy moved here to save space, or keep in left group if preferred */}
+          <button onClick={() => setShowMilestones(true)} className="p-1.5 text-gray-400 hover:text-yellow-600"><Trophy size={18} /></button>
         </div>
       </div>
 
-      <main className="max-w-4xl mx-auto p-4 md:p-6 space-y-6">
+      {/* MAIN CONTENT */}
+      <main className="relative z-10 max-w-5xl mx-auto p-4 md:p-8 md:pt-8 space-y-8">
         {activeView === 'dashboard' ? (
-          <div className="animate-in fade-in duration-300">
+          <div className="animate-enter">
 
-            {/* MOBILE GREETING */}
-            <div className="md:hidden mb-2">
-              <h2 className="text-2xl font-bold text-gray-900">{getGreeting()}, {getUserName()}</h2>
-              <p className="text-xs text-gray-500">Ready to build your legacy?</p>
+            {/* Mobile Greeting */}
+            <div className="md:hidden mb-6 animate-enter">
+              <h2 className="text-2xl font-bold text-gray-900 tracking-tight">{getGreeting()}, {getUserName()}</h2>
+              <p className="text-sm text-gray-500 mt-1">Ready to build your legacy?</p>
             </div>
 
-            <AiCoach goals={goals} />
-            <DailyTracker onUpdate={() => setLastUpdate(Date.now())} lastUpdate={lastUpdate} />
+            {/* 1. Coach Section */}
+            <div className="animate-enter delay-100">
+               <AiCoach goals={goals} />
+            </div>
 
-            <div className="border-t border-gray-200 pt-8">
+            {/* 2. Tracker Section (Card Effect) */}
+            <div className="animate-enter delay-200">
+               <DailyTracker onUpdate={() => setLastUpdate(Date.now())} lastUpdate={lastUpdate} />
+            </div>
+
+            {/* 3. Stats Section */}
+            <div className="animate-enter delay-300 border-t border-gray-100 pt-8 mt-8">
                <ProgressSection lastUpdate={lastUpdate} />
             </div>
 
-            <div className="pt-8 border-t border-gray-200">
+            {/* 4. Settings Section */}
+            <div className="animate-enter delay-300 pt-8 mt-8 border-t border-gray-100">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-lg font-bold text-gray-900">Goal Settings</h2>
+                <h2 className="text-lg font-bold text-gray-900 tracking-tight">Goal Settings</h2>
                 <button
                   onClick={() => { setEditingGoal(null); setShowForm(!showForm); }}
-                  className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg transition-colors"
+                  className="group flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors"
                 >
-                  <Plus size={16} />
+                  <div className="p-1 rounded-md bg-gray-100 group-hover:bg-gray-200 transition-colors"><Plus size={14} /></div>
                   {showForm ? 'Cancel' : 'Add Goal'}
                 </button>
               </div>
 
-              <div id="goal-form-container">
+              <div id="goal-form-container" className="transition-all duration-300 ease-in-out">
                 {showForm && (
-                  <GoalForm
-                    initialData={editingGoal}
-                    onGoalAdded={() => { fetchGoals(); setShowForm(false); setEditingGoal(null); setLastUpdate(Date.now()); }}
-                    onCancel={() => { setShowForm(false); setEditingGoal(null); }}
-                  />
+                  <div className="animate-enter">
+                    <GoalForm
+                      initialData={editingGoal}
+                      onGoalAdded={() => { fetchGoals(); setShowForm(false); setEditingGoal(null); setLastUpdate(Date.now()); }}
+                      onCancel={() => { setShowForm(false); setEditingGoal(null); }}
+                    />
+                  </div>
                 )}
               </div>
 
               {loading ? (
-                <div className="text-center text-gray-400 text-sm">Loading...</div>
+                <div className="text-center py-12 text-gray-400 text-sm animate-pulse">Loading your vision...</div>
               ) : (
-                <GoalList goals={goals} onDelete={confirmDelete} onEdit={handleEdit} />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Note: I'm assuming GoalList maps internally, but we'll wrap it for grid layout control if needed */}
+                  <GoalList goals={goals} onDelete={confirmDelete} onEdit={handleEdit} />
+                </div>
               )}
             </div>
           </div>
         ) : (
-          <div className="animate-in slide-in-from-right-4 duration-300">
+          /* JOURNAL VIEW */
+          <div className="animate-enter">
             <JournalPage />
           </div>
         )}
       </main>
 
-      {/* MOBILE BOTTOM NAV */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 pb-safe pt-2 px-6 flex justify-around items-center z-50 h-[70px]">
-        <button onClick={() => setActiveView('dashboard')} className={`flex flex-col items-center gap-1 w-full ${activeView === 'dashboard' ? 'text-blue-600' : 'text-gray-400'}`}>
+      {/* MOBILE BOTTOM NAV (Glass) */}
+      <div className="md:hidden glass-panel fixed bottom-0 left-0 right-0 border-t border-gray-200 pb-safe pt-2 px-6 flex justify-around items-center z-50 h-[70px]">
+        <button onClick={() => setActiveView('dashboard')} className={`flex flex-col items-center gap-1 w-full transition-all active:scale-95 ${activeView === 'dashboard' ? 'text-gray-900' : 'text-gray-400'}`}>
           <LayoutDashboard size={24} strokeWidth={activeView === 'dashboard' ? 2.5 : 2} />
-          <span className="text-[10px] font-medium">Focus</span>
+          <span className="text-[10px] font-bold">Focus</span>
         </button>
-        <button onClick={() => setActiveView('journal')} className={`flex flex-col items-center gap-1 w-full ${activeView === 'journal' ? 'text-blue-600' : 'text-gray-400'}`}>
+        <button onClick={() => setActiveView('journal')} className={`flex flex-col items-center gap-1 w-full transition-all active:scale-95 ${activeView === 'journal' ? 'text-gray-900' : 'text-gray-400'}`}>
           <BookOpen size={24} strokeWidth={activeView === 'journal' ? 2.5 : 2} />
-          <span className="text-[10px] font-medium">Journal</span>
+          <span className="text-[10px] font-bold">Journal</span>
         </button>
       </div>
     </div>
