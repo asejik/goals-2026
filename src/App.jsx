@@ -10,7 +10,8 @@ import {
   ClipboardList,
   Flame,
   Trophy,
-  Trash2
+  Trash2,
+  PenLine // Icon for Vision Edit
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 
@@ -25,6 +26,86 @@ import ConfirmModal from './components/ui/ConfirmModal';
 import WeeklyReviewModal from './components/dashboard/WeeklyReviewModal';
 import MilestonesModal from './components/dashboard/MilestonesModal';
 
+// --- SUB-COMPONENT: VISION HEADER ---
+function VisionHeader({ user }) {
+  const [vision, setVision] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchVision();
+  }, []);
+
+  const fetchVision = async () => {
+    try {
+      // Try to get existing setting
+      const { data, error } = await supabase
+        .from('user_settings')
+        .select('vision')
+        .eq('user_id', user.id)
+        .single();
+
+      if (data) {
+        setVision(data.vision || '');
+      } else if (error && error.code !== 'PGRST116') { // Ignore "not found" error
+        console.error(error);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveVision = async () => {
+    if (!vision.trim()) return setIsEditing(false);
+
+    try {
+      const { error } = await supabase
+        .from('user_settings')
+        .upsert({ user_id: user.id, vision: vision })
+        .select();
+
+      if (error) throw error;
+      setIsEditing(false);
+      toast.success('Vision updated');
+    } catch (err) {
+      toast.error('Failed to save vision');
+      console.error(err);
+    }
+  };
+
+  if (loading) return <div className="h-8 w-48 bg-gray-100 rounded animate-pulse mb-6" />;
+
+  return (
+    <div className="mb-8">
+      {isEditing ? (
+        <div className="flex items-center gap-2 animate-in fade-in">
+          <input
+            type="text"
+            autoFocus
+            className="text-2xl md:text-3xl font-bold text-gray-900 bg-transparent border-b-2 border-black outline-none w-full placeholder:text-gray-300"
+            placeholder="What is your Vision for 2026?"
+            value={vision}
+            onChange={(e) => setVision(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && saveVision()}
+            onBlur={saveVision}
+          />
+        </div>
+      ) : (
+        <div
+          onClick={() => setIsEditing(true)}
+          className="group cursor-pointer inline-flex items-center gap-3 transition-opacity hover:opacity-80"
+        >
+          <h1 className={`text-2xl md:text-3xl font-bold tracking-tight ${vision ? 'text-gray-900' : 'text-gray-300 italic'}`}>
+            {vision || "Click to set your 2026 Vision..."}
+          </h1>
+          <PenLine size={20} className="text-gray-300 opacity-0 group-hover:opacity-100 transition-all -ml-1" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- MAIN APP CONTENT ---
 function AppContent() {
   const { user, signOut } = useAuth();
 
@@ -38,7 +119,7 @@ function AppContent() {
   const [showForm, setShowForm] = useState(false);
   const [editingGoal, setEditingGoal] = useState(null);
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, goalId: null });
-  const [showResetConfirm, setShowResetConfirm] = useState(false); // NEW: Reset State
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [activeView, setActiveView] = useState('dashboard');
   const [showReview, setShowReview] = useState(false);
   const [showMilestones, setShowMilestones] = useState(false);
@@ -121,7 +202,6 @@ function AppContent() {
     }
   };
 
-  // NEW: Handle Full Account Reset
   const handleResetAccount = async () => {
     try {
       const { error } = await supabase.rpc('reset_user_data');
@@ -130,10 +210,10 @@ function AppContent() {
       toast.success('Account reset successfully');
       setShowResetConfirm(false);
 
-      // Refresh local state immediately
       setGoals([]);
       setStreak(0);
       setLastUpdate(Date.now());
+      // Force reload vision component slightly by triggering re-render if needed, or simple toast
     } catch (err) {
       console.error(err);
       toast.error('Failed to reset account');
@@ -179,7 +259,6 @@ function AppContent() {
         isDestructive={true}
       />
 
-      {/* RESET CONFIRM MODAL */}
       <ConfirmModal
         isOpen={showResetConfirm}
         onClose={() => setShowResetConfirm(false)}
@@ -193,11 +272,10 @@ function AppContent() {
       {showReview && <WeeklyReviewModal onClose={() => setShowReview(false)} />}
       {showMilestones && <MilestonesModal onClose={() => setShowMilestones(false)} />}
 
-      {/* DESKTOP NAV (Glass Panel) */}
+      {/* DESKTOP NAV */}
       <nav className="glass-panel sticky top-0 z-20 hidden md:block border-b border-gray-100">
         <div className="max-w-5xl mx-auto px-6 py-4 flex justify-between items-center">
 
-          {/* Brand */}
           <div className="flex items-center gap-6">
             <h1 className="text-xl font-bold tracking-tight text-gray-900">Align</h1>
 
@@ -217,7 +295,6 @@ function AppContent() {
             </div>
           </div>
 
-          {/* Right Actions */}
           <div className="flex items-center gap-4">
             <button
               onClick={() => setShowReview(true)}
@@ -229,7 +306,6 @@ function AppContent() {
 
             <div className="h-4 w-px bg-gray-200 mx-2"></div>
 
-            {/* Reset Button (Desktop) */}
             <button
               onClick={() => setShowResetConfirm(true)}
               className="text-gray-300 hover:text-red-500 transition-colors"
@@ -245,7 +321,6 @@ function AppContent() {
           </div>
         </div>
 
-        {/* Sub-Nav */}
         <div className="max-w-5xl mx-auto px-6 flex gap-8 text-sm font-medium border-t border-gray-100/50">
           <button onClick={() => setActiveView('dashboard')} className={`py-3 relative group transition-colors ${activeView === 'dashboard' ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
             <span className="flex items-center gap-2"><LayoutDashboard size={14} /> Dashboard</span>
@@ -258,7 +333,7 @@ function AppContent() {
         </div>
       </nav>
 
-      {/* MOBILE HEADER (Glass) */}
+      {/* MOBILE HEADER */}
       <div className="md:hidden glass-panel sticky top-0 z-20 border-b border-gray-100 p-4 flex justify-between items-center">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-bold tracking-tight text-gray-900">Align</h1>
@@ -269,7 +344,6 @@ function AppContent() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Mobile Weekly Review Button */}
           <button
             onClick={() => setShowReview(true)}
             className="flex items-center gap-1 bg-gray-100 text-gray-600 px-2 py-1.5 rounded-full hover:bg-gray-200 transition-colors"
@@ -282,7 +356,6 @@ function AppContent() {
 
           <button onClick={() => setShowMilestones(true)} className="p-1.5 text-gray-400 hover:text-yellow-600"><Trophy size={18} /></button>
 
-          {/* Mobile Reset Button */}
           <button
             onClick={() => setShowResetConfirm(true)}
             className="p-1.5 text-gray-300 hover:text-red-500 transition-colors"
@@ -299,18 +372,21 @@ function AppContent() {
         {activeView === 'dashboard' ? (
           <div className="animate-enter">
 
-            {/* Mobile Greeting */}
+            {/* MOBILE GREETING */}
             <div className="md:hidden mb-6 animate-enter">
               <h2 className="text-2xl font-bold text-gray-900 tracking-tight">{getGreeting()}, {getUserName()}</h2>
               <p className="text-sm text-gray-500 mt-1">Ready to build your legacy?</p>
             </div>
+
+            {/* --- NEW: VISION HEADER --- */}
+            <VisionHeader user={user} />
 
             {/* 1. Coach Section */}
             <div className="animate-enter delay-100">
                <AiCoach goals={goals} />
             </div>
 
-            {/* 2. Tracker Section (Card Effect) */}
+            {/* 2. Tracker Section */}
             <div className="animate-enter delay-200">
                <DailyTracker onUpdate={() => setLastUpdate(Date.now())} lastUpdate={lastUpdate} />
             </div>
@@ -362,7 +438,7 @@ function AppContent() {
         )}
       </main>
 
-      {/* MOBILE BOTTOM NAV (Glass) */}
+      {/* MOBILE BOTTOM NAV */}
       <div className="md:hidden glass-panel fixed bottom-0 left-0 right-0 border-t border-gray-200 pb-safe pt-2 px-6 flex justify-around items-center z-50 h-[70px]">
         <button onClick={() => setActiveView('dashboard')} className={`flex flex-col items-center gap-1 w-full transition-all active:scale-95 ${activeView === 'dashboard' ? 'text-gray-900' : 'text-gray-400'}`}>
           <LayoutDashboard size={24} strokeWidth={activeView === 'dashboard' ? 2.5 : 2} />

@@ -1,328 +1,459 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../context/AuthContext';
-import { Plus, X, Loader2, Calendar, Target, Check, Trash2, Settings, Flag } from 'lucide-react';
+import { X, Calendar, Trash2, Edit2, Check, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import CategoryManager from './CategoryManager';
 
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+// 1. DEFINE PRESETS
+const CATEGORY_PRESETS = [
+  { name: 'Health', color: '#ef4444' },
+  { name: 'Business', color: '#3b82f6' },
+  { name: 'Spiritual', color: '#8b5cf6' },
+  { name: 'Learning', color: '#f59e0b' },
+  { name: 'Relationships', color: '#ec4899' }
+];
+
+const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function GoalForm({ onGoalAdded, onCancel, initialData = null }) {
-  const { user } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
 
-  // Views
-  const [view, setView] = useState('MAIN');
-
-  // Data Loading
-  const [categories, setCategories] = useState([]);
-  const [loadingCats, setLoadingCats] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-
-  // Form State - STEP 1 (Identity)
-  const [identityTitle, setIdentityTitle] = useState('');
-  const [selectedCatId, setSelectedCatId] = useState('');
-
-  // Form State - STEP 2 (Actions)
-  const [actionSteps, setActionSteps] = useState([]);
-
-  // New Action Step Input State
-  const [newStep, setNewStep] = useState({
+  const [formData, setFormData] = useState({
     title: '',
-    period: 'daily',
-    target_value: 1,
-    specific_days: [],
-    type: 'boolean',
-    end_date: '' // NEW: Moved here
+    category: 'Health',
+    description: '',
+    color: '#ef4444'
   });
 
-  // 1. Fetch Categories & Handle Edit Mode
+  const [actions, setActions] = useState([]);
+
+  // New Action Input State
+  const [newAction, setNewAction] = useState({
+    title: '',
+    period: 'Daily',
+    target_value: 1,
+    end_date: '2026-12-31',
+    frequency: [] // Stores ["Mon", "Wed"] etc.
+  });
+
+  const [editingIndex, setEditingIndex] = useState(-1);
+
+  // 2. INITIALIZATION LOGIC
   useEffect(() => {
-    fetchCategories();
-
     if (initialData) {
-      setIdentityTitle(initialData.title);
-      setSelectedCatId(initialData.category_id);
+      // Logic to determine if category is preset or custom
+      const presetMatch = CATEGORY_PRESETS.find(c => c.name === initialData.category);
+      const isPreset = !!presetMatch;
 
-      const fetchSteps = async () => {
-        const { data } = await supabase
-          .from('action_steps')
-          .select('*')
-          .eq('goal_id', initialData.id);
-        if (data) setActionSteps(data);
-      };
-      fetchSteps();
+      setIsCustomCategory(!isPreset);
+
+      setFormData({
+        title: initialData.title,
+        category: initialData.category || 'Health', // Fallback to avoid controlled/uncontrolled error
+        description: initialData.description || '',
+        color: initialData.color || (presetMatch ? presetMatch.color : '#000000')
+      });
+      fetchActions(initialData.id);
     }
-  }, [initialData, view]);
+  }, [initialData]);
 
-  const fetchCategories = async () => {
-    const { data } = await supabase.from('categories').select('*').order('name');
-    setCategories(data || []);
-    setLoadingCats(false);
+  const fetchActions = async (goalId) => {
+    const { data } = await supabase.from('action_steps').select('*').eq('goal_id', goalId);
+    if (data) {
+      // Parse frequency string back to array if needed
+      const parsedActions = data.map(a => ({
+        ...a,
+        frequency: a.frequency ? a.frequency.split(',') : []
+      }));
+      setActions(parsedActions);
+    }
   };
 
-  // --- ACTION STEP LOGIC ---
+  // 3. HANDLERS
+  const handleCategoryChange = (e) => {
+    const value = e.target.value;
 
-  const addActionStep = () => {
-    if (!newStep.title.trim()) return toast.error('Action title is required');
-
-    if (newStep.period === 'weekly' && newStep.specific_days.length === 0) {
-      return toast.error('Please select days for weekly action');
+    if (value === 'custom_new') {
+      setIsCustomCategory(true);
+      setFormData({ ...formData, category: '', color: '#000000' });
+    } else {
+      setIsCustomCategory(false);
+      const preset = CATEGORY_PRESETS.find(p => p.name === value);
+      if (preset) {
+        setFormData({ ...formData, category: preset.name, color: preset.color });
+      }
     }
-
-    // Add to list
-    setActionSteps([...actionSteps, { ...newStep, id: Date.now().toString() }]);
-
-    // Reset inputs
-    setNewStep({
-      title: '',
-      period: 'daily',
-      target_value: 1,
-      specific_days: [],
-      type: 'boolean',
-      end_date: ''
-    });
-  };
-
-  const removeActionStep = (id) => {
-    setActionSteps(actionSteps.filter(s => s.id !== id));
   };
 
   const toggleDay = (day) => {
-    setNewStep(prev => {
-      const days = prev.specific_days.includes(day)
-        ? prev.specific_days.filter(d => d !== day)
-        : [...prev.specific_days, day];
-      return { ...prev, specific_days: days };
+    let newFreq = [...newAction.frequency];
+    if (newFreq.includes(day)) {
+      newFreq = newFreq.filter(d => d !== day);
+    } else {
+      newFreq.push(day);
+    }
+    // Update frequency AND target_value (target = number of days selected)
+    setNewAction({
+      ...newAction,
+      frequency: newFreq,
+      target_value: newFreq.length > 0 ? newFreq.length : 1
     });
   };
 
-  // --- SUBMIT LOGIC ---
+  const handleAddOrUpdateAction = () => {
+    if (!newAction.title) return toast.error('Action title is required');
 
-  const handleFullSubmit = async () => {
-    if (!identityTitle.trim()) return toast.error('Please enter your Identity Goal');
-    if (!selectedCatId) return toast.error('Please select a Category');
-    if (actionSteps.length === 0) return toast.error('Add at least one Action Step');
+    // Prepare payload (convert frequency array to string for display/storage logic if strictly needed,
+    // but we keep it as array in state)
 
-    setSubmitting(true);
-    try {
-      let goalId;
+    if (editingIndex >= 0) {
+      const updatedActions = [...actions];
+      updatedActions[editingIndex] = { ...newAction };
+      setActions(updatedActions);
+      setEditingIndex(-1);
+      toast.success('Action updated in list');
+    } else {
+      setActions([...actions, { ...newAction }]);
+    }
 
-      // 1. Upsert Goal (Identity) - No due date here anymore
-      const goalPayload = {
-        user_id: user.id,
-        category_id: selectedCatId,
-        title: identityTitle
-      };
+    // Reset
+    setNewAction({
+      title: '',
+      period: 'Daily',
+      target_value: 1,
+      end_date: '2026-12-31',
+      frequency: []
+    });
+  };
 
-      if (initialData) {
-        await supabase.from('goals').update(goalPayload).eq('id', initialData.id);
-        goalId = initialData.id;
-      } else {
-        const { data, error } = await supabase.from('goals').insert(goalPayload).select().single();
-        if (error) throw error;
-        goalId = data.id;
-      }
+  const handleEditClick = (index) => {
+    const actionToEdit = actions[index];
+    setNewAction({ ...actionToEdit });
+    setEditingIndex(index);
+    // Scroll to input
+    document.getElementById('action-input-area')?.scrollIntoView({ behavior: 'smooth' });
+  };
 
-      // 2. Upsert Action Steps (With end_date)
-      for (const step of actionSteps) {
-        const stepPayload = {
-          user_id: user.id,
-          goal_id: goalId,
-          title: step.title,
-          type: step.type,
-          period: step.period,
-          target_value: step.target_value,
-          specific_days: step.period === 'weekly' ? step.specific_days : null,
-          end_date: step.end_date || null // Save the date!
-        };
-
-        if (typeof step.id === 'string' && step.id.length > 20) {
-            await supabase.from('action_steps').update(stepPayload).eq('id', step.id);
-        } else {
-            await supabase.from('action_steps').insert(stepPayload);
-        }
-      }
-
-      toast.success(initialData ? 'Goal updated!' : 'Goal created!');
-      onGoalAdded();
-    } catch (error) {
-      console.error(error);
-      toast.error(error.message);
-    } finally {
-      setSubmitting(false);
+  const removeAction = async (index) => {
+    const actionToRemove = actions[index];
+    if (actionToRemove.id) {
+       const { error } = await supabase.from('action_steps').delete().eq('id', actionToRemove.id);
+       if (error) {
+         toast.error('Failed to delete action');
+         return;
+       }
+    }
+    setActions(actions.filter((_, i) => i !== index));
+    if (editingIndex === index) {
+      setEditingIndex(-1);
+      setNewAction({ title: '', period: 'Daily', target_value: 1, end_date: '2026-12-31', frequency: [] });
     }
   };
 
-  if (view === 'CATEGORY_MANAGER') {
-    return <CategoryManager onClose={() => setView('MAIN')} />;
-  }
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    if (!formData.title || !formData.category) {
+        toast.error("Please fill in Goal Title and Category");
+        setLoading(false);
+        return;
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("No user found");
+
+      let goalId = initialData?.id;
+
+      // A. UPSERT GOAL
+      const goalPayload = {
+        ...formData,
+        user_id: user.id
+      };
+
+      let result;
+      if (goalId) {
+        result = await supabase.from('goals').update(goalPayload).eq('id', goalId).select().single();
+      } else {
+        result = await supabase.from('goals').insert([goalPayload]).select().single();
+      }
+
+      if (result.error) throw result.error;
+      goalId = result.data.id;
+
+      // B. UPSERT ACTIONS
+      for (const action of actions) {
+        const actionPayload = {
+          goal_id: goalId,
+          user_id: user.id,
+          title: action.title,
+          period: action.period,
+          target_value: action.target_value,
+          end_date: action.end_date,
+          // Join array to string for DB storage "Mon,Tue"
+          frequency: Array.isArray(action.frequency) ? action.frequency.join(',') : action.frequency
+        };
+
+        if (action.id) {
+          const { error } = await supabase.from('action_steps').update(actionPayload).eq('id', action.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from('action_steps').insert(actionPayload);
+          if (error) throw error;
+        }
+      }
+
+      toast.success(initialData ? 'Goal updated' : 'Goal created');
+      onGoalAdded();
+    } catch (error) {
+      console.error("SAVE ERROR:", error);
+      toast.error(`Error saving goal: ${error.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 mb-8 animate-in fade-in slide-in-from-top-4 shadow-sm" id="goal-form-container">
-
-      <div className="flex justify-between items-start mb-6">
-        <div>
-          <h2 className="text-lg font-bold text-gray-900">{initialData ? 'Edit Goal' : 'Define Your Goal'}</h2>
-          <p className="text-xs text-gray-500">Identity first, actions second.</p>
-        </div>
-        <button onClick={onCancel} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+    <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xl mb-8 animate-in slide-in-from-top-4">
+      <div className="flex justify-between items-center mb-6">
+        <h3 className="text-lg font-bold text-gray-900">
+          {initialData ? 'Edit Goal' : 'Define Your Identity'}
+        </h3>
+        <button onClick={onCancel} className="text-gray-400 hover:text-gray-600">
+          <X size={20} />
+        </button>
       </div>
 
-      <div className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* GOAL INPUTS */}
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">I want to become...</label>
+            <input
+              type="text"
+              placeholder="e.g. An Athlete, A Polyglot, A Reader"
+              className="w-full text-lg font-bold border-b-2 border-gray-200 focus:border-black outline-none py-2 bg-transparent placeholder:font-normal"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              required
+            />
+          </div>
 
-        {/* STEP 1: IDENTITY (Timeless) */}
-        <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-100 space-y-4">
-          <div className="flex justify-between items-center">
-            <label className="text-xs font-bold text-blue-800 uppercase tracking-wider flex items-center gap-1">
-              <Target size={12} /> Step 1: Who are you becoming?
-            </label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Category</label>
+
+                {!isCustomCategory ? (
+                   <select
+                     className="w-full p-2 bg-gray-50 rounded-lg border border-gray-200 text-sm font-medium"
+                     value={formData.category}
+                     onChange={handleCategoryChange}
+                   >
+                     {CATEGORY_PRESETS.map(preset => (
+                       <option key={preset.name} value={preset.name}>{preset.name}</option>
+                     ))}
+                     <option value="custom_new">+ Create New Category</option>
+                   </select>
+                ) : (
+                   <div className="flex gap-2">
+                     <input
+                        type="text"
+                        placeholder="New Category Name"
+                        className="w-full p-2 bg-white rounded-lg border border-gray-200 text-sm font-bold text-gray-900"
+                        value={formData.category}
+                        onChange={(e) => setFormData({...formData, category: e.target.value})}
+                        autoFocus
+                     />
+                     <button
+                        type="button"
+                        onClick={() => { setIsCustomCategory(false); setFormData({...formData, category: 'Health', color: '#ef4444'}); }}
+                        className="p-2 text-gray-400 hover:text-red-500"
+                        title="Cancel Custom Category"
+                     >
+                       <X size={18} />
+                     </button>
+                   </div>
+                )}
+             </div>
+
+             {/* COLOR PICKER: Only shows if Custom Category is active */}
+             {isCustomCategory && (
+               <div className="animate-in fade-in">
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Category Color</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      className="w-full h-[42px] p-1 bg-gray-50 rounded-lg border border-gray-200 cursor-pointer"
+                      value={formData.color}
+                      onChange={(e) => setFormData({ ...formData, color: e.target.value })}
+                    />
+                  </div>
+               </div>
+             )}
+          </div>
+        </div>
+
+        <div className="h-px bg-gray-100 my-4" />
+
+        {/* ACTIONS SECTION */}
+        <div className="space-y-4">
+          <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+            <Calendar size={16} />
+            Step 2: What actions prove this?
+          </h4>
+
+          <div className="bg-gray-50 p-4 rounded-xl space-y-3" id="action-input-area">
+            <div className="flex flex-col gap-3">
+
+              {/* Top Row: Title, Period, Date */}
+              <div className="flex flex-col md:flex-row gap-3">
+                <input
+                  type="text"
+                  placeholder="Action (e.g., Run 5km)"
+                  className="flex-1 p-2 border border-gray-200 rounded-lg text-sm"
+                  value={newAction.title}
+                  onChange={(e) => setNewAction({ ...newAction, title: e.target.value })}
+                />
+                <div className="flex gap-2">
+                  <select
+                    className="p-2 border border-gray-200 rounded-lg text-sm bg-white"
+                    value={newAction.period}
+                    onChange={(e) => setNewAction({ ...newAction, period: e.target.value, frequency: [] })}
+                  >
+                    <option>Daily</option>
+                    <option>Weekly</option>
+                    <option>Monthly</option>
+                  </select>
+
+                  <input
+                     type="date"
+                     className="p-2 border border-gray-200 rounded-lg text-sm bg-white"
+                     value={newAction.end_date}
+                     onChange={(e) => setNewAction({ ...newAction, end_date: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              {/* Weekly Day Selector (Only if Weekly) */}
+              {newAction.period === 'Weekly' && (
+                <div className="animate-in slide-in-from-top-2">
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Select Days (Optional)</label>
+                  <div className="flex gap-2 flex-wrap">
+                    {DAYS_OF_WEEK.map(day => {
+                      const isSelected = newAction.frequency?.includes(day);
+                      return (
+                        <button
+                          key={day}
+                          type="button"
+                          onClick={() => toggleDay(day)}
+                          className={`
+                            w-8 h-8 rounded-full text-[10px] font-bold transition-all border
+                            ${isSelected
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300'
+                            }
+                          `}
+                        >
+                          {day.charAt(0)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+            </div>
+
             <button
-              onClick={() => setView('CATEGORY_MANAGER')}
-              className="text-[10px] font-bold text-blue-600 hover:underline flex items-center gap-1"
+              type="button"
+              onClick={handleAddOrUpdateAction}
+              className={`w-full py-2 rounded-lg text-sm font-bold transition-all ${
+                editingIndex >= 0
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-white border-2 border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600'
+              }`}
             >
-              <Settings size={10} /> Manage Categories
+              {editingIndex >= 0 ? 'Update Action Step' : '+ Add This Action Step'}
             </button>
           </div>
 
-          <div className="grid md:grid-cols-12 gap-3">
-             <div className="md:col-span-4">
-               <select
-                 className="w-full px-3 py-2.5 bg-white border border-blue-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                 value={selectedCatId}
-                 onChange={e => setSelectedCatId(e.target.value)}
-                 disabled={loadingCats}
-               >
-                 <option value="" disabled>Select Category</option>
-                 {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-               </select>
-             </div>
-             <div className="md:col-span-8">
-               <input
-                  type="text"
-                  placeholder="e.g., I am a consistent runner"
-                  className="w-full px-3 py-2.5 bg-white border border-blue-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 font-medium placeholder:font-normal"
-                  value={identityTitle}
-                  onChange={e => setIdentityTitle(e.target.value)}
-               />
-             </div>
+          {/* ACTION LIST */}
+          <div className="space-y-2">
+            {actions.map((action, idx) => (
+              <div key={idx} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-lg group hover:border-blue-200 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${editingIndex === idx ? 'bg-blue-100 text-blue-600' : 'bg-green-50 text-green-600'}`}>
+                    {editingIndex === idx ? <Edit2 size={14} /> : <Check size={14} />}
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-gray-900">{action.title}</div>
+                    <div className="text-xs text-gray-500 flex items-center gap-2">
+                      <span>{action.period}</span>
+
+                      {/* Show selected days if any */}
+                      {action.frequency && action.frequency.length > 0 && (
+                        <>
+                          <span className="w-1 h-1 bg-gray-300 rounded-full" />
+                          <span className="text-blue-600 font-medium">
+                            {Array.isArray(action.frequency) ? action.frequency.join(', ') : action.frequency}
+                          </span>
+                        </>
+                      )}
+
+                      <span className="w-1 h-1 bg-gray-300 rounded-full" />
+                      <span className="text-orange-400 bg-orange-50 px-1.5 rounded text-[10px] font-medium border border-orange-100">
+                        Ends {action.end_date}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleEditClick(idx)}
+                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  >
+                    <Edit2 size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeAction(idx)}
+                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {actions.length === 0 && (
+               <div className="text-center py-4 text-xs text-gray-400 flex flex-col items-center gap-1">
+                  <AlertCircle size={16} />
+                  No actions defined yet.
+               </div>
+            )}
           </div>
         </div>
 
-        {/* STEP 2: ACTIONS (Time-bound) */}
-        <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-           <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1 mb-4">
-              <Calendar size={12} /> Step 2: What actions prove this?
-           </label>
-
-           {/* List of Added Steps */}
-           {actionSteps.length > 0 && (
-             <div className="mb-6 space-y-2">
-               {actionSteps.map((step) => (
-                 <div key={step.id} className="flex items-center justify-between bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-green-100 text-green-700 p-1.5 rounded-md"><Check size={14} /></div>
-                      <div>
-                        <p className="text-sm font-bold text-gray-800">{step.title}</p>
-                        <div className="flex gap-2 text-xs text-gray-400 capitalize items-center">
-                          <span>{step.period} • {step.target_value}x</span>
-                          {step.end_date && (
-                             <span className="flex items-center gap-1 text-orange-400 bg-orange-50 px-1.5 rounded border border-orange-100">
-                               <Flag size={10} /> Ends {step.end_date}
-                             </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <button onClick={() => removeActionStep(step.id)} className="text-gray-300 hover:text-red-500"><Trash2 size={14} /></button>
-                 </div>
-               ))}
-             </div>
-           )}
-
-           {/* Add New Step Form */}
-           <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
-             <div className="grid md:grid-cols-12 gap-3 mb-3">
-
-               {/* Title */}
-               <div className="md:col-span-5">
-                 <input
-                   type="text"
-                   placeholder="Action (e.g., Run 5km)"
-                   className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-gray-400"
-                   value={newStep.title}
-                   onChange={e => setNewStep({...newStep, title: e.target.value})}
-                 />
-               </div>
-
-               {/* Period */}
-               <div className="md:col-span-3">
-                 <select
-                   className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none"
-                   value={newStep.period}
-                   onChange={e => setNewStep({...newStep, period: e.target.value})}
-                 >
-                   <option value="daily">Daily</option>
-                   <option value="weekly">Weekly</option>
-                   <option value="monthly">Monthly</option>
-                 </select>
-               </div>
-
-               {/* Target */}
-               <div className="md:col-span-2">
-                 <input
-                   type="number"
-                   placeholder="Target"
-                   className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none"
-                   value={newStep.target_value}
-                   onChange={e => setNewStep({...newStep, target_value: e.target.value})}
-                 />
-               </div>
-
-               {/* NEW: End Date */}
-               <div className="md:col-span-2">
-                 <input
-                   type="date"
-                   className="w-full px-2 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none text-gray-500"
-                   value={newStep.end_date}
-                   onChange={e => setNewStep({...newStep, end_date: e.target.value})}
-                   title="End Date"
-                 />
-               </div>
-             </div>
-
-             {newStep.period === 'weekly' && (
-               <div className="flex gap-2 mb-3">
-                 {DAYS.map(day => (
-                   <button
-                     key={day}
-                     onClick={() => toggleDay(day)}
-                     className={`text-[10px] w-8 h-8 rounded-full font-bold transition-all ${newStep.specific_days.includes(day) ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
-                   >
-                     {day.charAt(0)}
-                   </button>
-                 ))}
-               </div>
-             )}
-
-             <button
-               onClick={addActionStep}
-               className="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-bold rounded-lg transition-colors border border-gray-200"
-             >
-               + Add This Action Step
-             </button>
-           </div>
+        <div className="flex justify-end gap-3 pt-4 border-t border-gray-50">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-800"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={loading}
+            className="bg-black text-white px-6 py-2 rounded-lg text-sm font-bold hover:bg-gray-800 transition-all disabled:opacity-50"
+          >
+            {loading ? 'Saving...' : (initialData ? 'Save Changes' : 'Create Goal')}
+          </button>
         </div>
-
-        <button
-          onClick={handleFullSubmit}
-          disabled={submitting}
-          className="w-full py-3 bg-gray-900 hover:bg-black text-white rounded-xl font-bold shadow-lg shadow-gray-200 transition-all flex items-center justify-center gap-2"
-        >
-          {submitting ? <Loader2 className="animate-spin" /> : (initialData ? <Check /> : <Plus />)}
-          {initialData ? 'Save Changes' : 'Create Identity Goal'}
-        </button>
-
-      </div>
+      </form>
     </div>
   );
 }
