@@ -3,8 +3,8 @@ import { supabase } from '../../lib/supabase';
 import { X, Calendar, Trash2, Edit2, Check, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
-// 1. DEFINE PRESETS
-const CATEGORY_PRESETS = [
+// 1. DEFINE STANDARD PRESETS
+const STANDARD_PRESETS = [
   { name: 'Health', color: '#ef4444' },
   { name: 'Business', color: '#3b82f6' },
   { name: 'Spiritual', color: '#8b5cf6' },
@@ -18,6 +18,9 @@ export default function GoalForm({ onGoalAdded, onCancel, initialData = null }) 
   const [loading, setLoading] = useState(false);
   const [isCustomCategory, setIsCustomCategory] = useState(false);
 
+  // NEW: State to hold merged list of presets + user custom categories
+  const [categoryOptions, setCategoryOptions] = useState(STANDARD_PRESETS);
+
   const [formData, setFormData] = useState({
     title: '',
     category: 'Health',
@@ -27,40 +30,77 @@ export default function GoalForm({ onGoalAdded, onCancel, initialData = null }) 
 
   const [actions, setActions] = useState([]);
 
-  // New Action Input State
   const [newAction, setNewAction] = useState({
     title: '',
     period: 'Daily',
     target_value: 1,
     end_date: '2026-12-31',
-    frequency: [] // Stores ["Mon", "Wed"] etc.
+    frequency: []
   });
 
   const [editingIndex, setEditingIndex] = useState(-1);
 
-  // 2. INITIALIZATION LOGIC
+  // 2. INITIALIZATION & FETCHING
   useEffect(() => {
-    if (initialData) {
-      // Logic to determine if category is preset or custom
-      const presetMatch = CATEGORY_PRESETS.find(c => c.name === initialData.category);
-      const isPreset = !!presetMatch;
+    fetchUserCategories(); // Load saved categories first
 
-      setIsCustomCategory(!isPreset);
+    if (initialData) {
+      // Logic to determine if category is custom or standard
+      const isStandard = STANDARD_PRESETS.some(c => c.name === initialData.category);
+
+      // If it's not standard, it might be a custom one we haven't loaded yet,
+      // or simply a custom one. We default to false for "isCustomCategory"
+      // because we want it to show in the dropdown if possible.
+
+      // However, if we are EDITING a custom category, we might want to show the text input?
+      // For simplicity in V1: We treat existing custom categories as "Selectable Options"
+      // unless the user explicitly chooses "Create New".
+
+      setIsCustomCategory(false);
 
       setFormData({
         title: initialData.title,
-        category: initialData.category || 'Health', // Fallback to avoid controlled/uncontrolled error
+        category: initialData.category || 'Health',
         description: initialData.description || '',
-        color: initialData.color || (presetMatch ? presetMatch.color : '#000000')
+        color: initialData.color || '#000000'
       });
       fetchActions(initialData.id);
     }
   }, [initialData]);
 
+  // NEW: Helper to fetch existing categories from DB
+  const fetchUserCategories = async () => {
+    try {
+      const { data: goals } = await supabase
+        .from('goals')
+        .select('category, color');
+
+      if (goals && goals.length > 0) {
+        // Create a map of unique categories
+        const uniqueCats = new Map();
+
+        // 1. Add Standards first
+        STANDARD_PRESETS.forEach(p => uniqueCats.set(p.name, p.color));
+
+        // 2. Add User's existing goals
+        goals.forEach(g => {
+          if (g.category && !uniqueCats.has(g.category)) {
+            uniqueCats.set(g.category, g.color);
+          }
+        });
+
+        // Convert back to array
+        const mergedOptions = Array.from(uniqueCats.entries()).map(([name, color]) => ({ name, color }));
+        setCategoryOptions(mergedOptions);
+      }
+    } catch (err) {
+      console.error("Error fetching categories", err);
+    }
+  };
+
   const fetchActions = async (goalId) => {
     const { data } = await supabase.from('action_steps').select('*').eq('goal_id', goalId);
     if (data) {
-      // Parse frequency string back to array if needed
       const parsedActions = data.map(a => ({
         ...a,
         frequency: a.frequency ? a.frequency.split(',') : []
@@ -78,9 +118,10 @@ export default function GoalForm({ onGoalAdded, onCancel, initialData = null }) 
       setFormData({ ...formData, category: '', color: '#000000' });
     } else {
       setIsCustomCategory(false);
-      const preset = CATEGORY_PRESETS.find(p => p.name === value);
-      if (preset) {
-        setFormData({ ...formData, category: preset.name, color: preset.color });
+      // Find the option to auto-set the color
+      const selectedOption = categoryOptions.find(p => p.name === value);
+      if (selectedOption) {
+        setFormData({ ...formData, category: selectedOption.name, color: selectedOption.color });
       }
     }
   };
@@ -92,7 +133,6 @@ export default function GoalForm({ onGoalAdded, onCancel, initialData = null }) 
     } else {
       newFreq.push(day);
     }
-    // Update frequency AND target_value (target = number of days selected)
     setNewAction({
       ...newAction,
       frequency: newFreq,
@@ -102,9 +142,6 @@ export default function GoalForm({ onGoalAdded, onCancel, initialData = null }) 
 
   const handleAddOrUpdateAction = () => {
     if (!newAction.title) return toast.error('Action title is required');
-
-    // Prepare payload (convert frequency array to string for display/storage logic if strictly needed,
-    // but we keep it as array in state)
 
     if (editingIndex >= 0) {
       const updatedActions = [...actions];
@@ -116,7 +153,6 @@ export default function GoalForm({ onGoalAdded, onCancel, initialData = null }) 
       setActions([...actions, { ...newAction }]);
     }
 
-    // Reset
     setNewAction({
       title: '',
       period: 'Daily',
@@ -130,7 +166,6 @@ export default function GoalForm({ onGoalAdded, onCancel, initialData = null }) 
     const actionToEdit = actions[index];
     setNewAction({ ...actionToEdit });
     setEditingIndex(index);
-    // Scroll to input
     document.getElementById('action-input-area')?.scrollIntoView({ behavior: 'smooth' });
   };
 
@@ -191,7 +226,6 @@ export default function GoalForm({ onGoalAdded, onCancel, initialData = null }) 
           period: action.period,
           target_value: action.target_value,
           end_date: action.end_date,
-          // Join array to string for DB storage "Mon,Tue"
           frequency: Array.isArray(action.frequency) ? action.frequency.join(',') : action.frequency
         };
 
@@ -250,9 +284,11 @@ export default function GoalForm({ onGoalAdded, onCancel, initialData = null }) 
                      value={formData.category}
                      onChange={handleCategoryChange}
                    >
-                     {CATEGORY_PRESETS.map(preset => (
-                       <option key={preset.name} value={preset.name}>{preset.name}</option>
+                     {/* RENDER DYNAMIC OPTIONS */}
+                     {categoryOptions.map(opt => (
+                       <option key={opt.name} value={opt.name}>{opt.name}</option>
                      ))}
+                     <option disabled>──────────</option>
                      <option value="custom_new">+ Create New Category</option>
                    </select>
                 ) : (
@@ -277,20 +313,20 @@ export default function GoalForm({ onGoalAdded, onCancel, initialData = null }) 
                 )}
              </div>
 
-             {/* COLOR PICKER: Only shows if Custom Category is active */}
-             {isCustomCategory && (
-               <div className="animate-in fade-in">
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Category Color</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      className="w-full h-[42px] p-1 bg-gray-50 rounded-lg border border-gray-200 cursor-pointer"
-                      value={formData.color}
-                      onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                    />
-                  </div>
-               </div>
-             )}
+             {/* COLOR PICKER: Shows if Custom Category OR if user wants to tweak a standard one */}
+             <div className="animate-in fade-in">
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Category Color</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    className="w-full h-[42px] p-1 bg-gray-50 rounded-lg border border-gray-200 cursor-pointer"
+                    value={formData.color}
+                    onChange={(e) => setFormData({ ...formData, color: e.target.value })}
+                    // You can optionally disable this if you want to enforce preset colors,
+                    // but keeping it editable is usually better for users.
+                  />
+                </div>
+             </div>
           </div>
         </div>
 
@@ -305,8 +341,6 @@ export default function GoalForm({ onGoalAdded, onCancel, initialData = null }) 
 
           <div className="bg-gray-50 p-4 rounded-xl space-y-3" id="action-input-area">
             <div className="flex flex-col gap-3">
-
-              {/* Top Row: Title, Period, Date */}
               <div className="flex flex-col md:flex-row gap-3">
                 <input
                   type="text"
@@ -335,7 +369,7 @@ export default function GoalForm({ onGoalAdded, onCancel, initialData = null }) 
                 </div>
               </div>
 
-              {/* Weekly Day Selector (Only if Weekly) */}
+              {/* Weekly Day Selector */}
               {newAction.period === 'Weekly' && (
                 <div className="animate-in slide-in-from-top-2">
                   <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Select Days (Optional)</label>
@@ -362,7 +396,6 @@ export default function GoalForm({ onGoalAdded, onCancel, initialData = null }) 
                   </div>
                 </div>
               )}
-
             </div>
 
             <button
@@ -378,7 +411,6 @@ export default function GoalForm({ onGoalAdded, onCancel, initialData = null }) 
             </button>
           </div>
 
-          {/* ACTION LIST */}
           <div className="space-y-2">
             {actions.map((action, idx) => (
               <div key={idx} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-lg group hover:border-blue-200 transition-colors">
@@ -390,8 +422,6 @@ export default function GoalForm({ onGoalAdded, onCancel, initialData = null }) 
                     <div className="text-sm font-bold text-gray-900">{action.title}</div>
                     <div className="text-xs text-gray-500 flex items-center gap-2">
                       <span>{action.period}</span>
-
-                      {/* Show selected days if any */}
                       {action.frequency && action.frequency.length > 0 && (
                         <>
                           <span className="w-1 h-1 bg-gray-300 rounded-full" />
@@ -400,7 +430,6 @@ export default function GoalForm({ onGoalAdded, onCancel, initialData = null }) 
                           </span>
                         </>
                       )}
-
                       <span className="w-1 h-1 bg-gray-300 rounded-full" />
                       <span className="text-orange-400 bg-orange-50 px-1.5 rounded text-[10px] font-medium border border-orange-100">
                         Ends {action.end_date}

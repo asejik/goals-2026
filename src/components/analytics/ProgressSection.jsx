@@ -10,7 +10,7 @@ export default function ProgressSection({ lastUpdate }) {
       const { data: actions } = await supabase
         .from('action_steps')
         .select(`
-          id, title, target_value, period, created_at,
+          id, title, target_value, period, created_at, end_date,
           goals ( title ),
           daily_logs ( log_date, is_complete, numeric_value )
         `)
@@ -28,10 +28,32 @@ export default function ProgressSection({ lastUpdate }) {
       });
 
       const processed = actions.map(action => {
+        // 1. Calculate Real Target (UNIVERSAL LOGIC)
+        let realTarget = action.target_value;
+
+        // Normalize period to lowercase to catch 'Daily', 'daily', or 'DAILY'
+        const normalizedPeriod = action.period ? action.period.toLowerCase() : '';
+
+        // If Daily, target = Total Days from Start (Created) to End
+        if (normalizedPeriod === 'daily' && action.end_date) {
+           const start = new Date(action.created_at);
+           const end = new Date(action.end_date);
+
+           // Calculate difference in milliseconds
+           const diffTime = end - start;
+
+           // Convert to days (and round up to be safe)
+           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+           // Ensure we don't return 0 or negative numbers if dates are weird
+           realTarget = diffDays > 0 ? diffDays : 1;
+        }
+
         const totalCompleted = action.daily_logs?.filter(l => l.is_complete || l.numeric_value > 0).length || 0;
+
         let progress = 0;
-        if (action.target_value > 0) {
-           progress = Math.min(100, Math.round((totalCompleted / action.target_value) * 100));
+        if (realTarget > 0) {
+           progress = Math.min(100, Math.round((totalCompleted / realTarget) * 100));
         }
 
         const history = last7Days.map(day => {
@@ -49,7 +71,8 @@ export default function ProgressSection({ lastUpdate }) {
           progress,
           history,
           totalCompleted,
-          target: action.target_value
+          target: realTarget,
+          endDate: action.end_date
         };
       });
       setItems(processed);
@@ -62,7 +85,6 @@ export default function ProgressSection({ lastUpdate }) {
 
   return (
     <div className="space-y-3">
-      {/* UNIFORM HEADER */}
       <h2 className="text-sm font-bold text-gray-900 tracking-tight">
         Performance & Deadlines
       </h2>
@@ -78,9 +100,16 @@ export default function ProgressSection({ lastUpdate }) {
                 <h3 className="text-sm font-bold text-gray-900 truncate leading-tight">{item.title}</h3>
                 <p className="text-[10px] text-gray-400 truncate mt-0.5">{item.goalTitle}</p>
               </div>
-              <div className="text-right flex-shrink-0">
-                <span className="text-xs font-bold text-gray-900">{item.totalCompleted}</span>
-                <span className="text-[10px] text-gray-400"> / {item.target > 0 ? item.target : '∞'}</span>
+              <div className="text-right flex-shrink-0 flex flex-col items-end">
+                <div>
+                   <span className="text-xs font-bold text-gray-900">{item.totalCompleted}</span>
+                   <span className="text-[10px] text-gray-400"> / {item.target > 0 ? item.target : '∞'}</span>
+                </div>
+                {item.endDate && (
+                  <span className="text-[9px] text-orange-500 font-medium bg-orange-50 px-1.5 rounded-sm mt-0.5 border border-orange-100">
+                    Ends {new Date(item.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </span>
+                )}
               </div>
             </div>
 
